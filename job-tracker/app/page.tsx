@@ -238,8 +238,9 @@ export default function Dashboard() {
         </div>
         
         {/* ADDED: min-w-[1200px] to table to force horizontal scrollbar and stop columns going hidden */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1200px]">
+        {/* INCREASED min-w-[1400px] to make room for the new Status and Created At columns */}
+        <div className="overflow-x-auto pb-4">
+          <table className="w-full text-left border-collapse min-w-[1400px]">
             <thead>
               <tr className="bg-slate-100/50 border-b border-slate-200">
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Company & Role</th>
@@ -247,14 +248,17 @@ export default function Dashboard() {
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Location</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Skills</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Timeline</th>
+                {/* ADDED: Status and Date Added Headers */}
+                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Date Added</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
-                <th className="p-5 w-10"></th> {/* Empty header for delete button */}
+                <th className="p-5 w-10"></th> 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {jobs.length === 0 ? (
                 <tr>
-                    <td colSpan={7} className="text-center p-16 text-slate-500">
+                    <td colSpan={9} className="text-center p-16 text-slate-500">
                         <AcademicCapIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         No jobs added yet. Paste a career link above to begin.
                     </td>
@@ -262,7 +266,6 @@ export default function Dashboard() {
               ) : jobs.map((job) => {
                 const alertProps = getDeadlineAlertProps(job.deadline);
                 return (
-                  // ADDED: "group relative" so we can hide/show the delete button on hover
                   <tr 
                     key={job.id} 
                     className={`transition-colors font-medium text-slate-950 group relative ${alertProps.rowClass}`}
@@ -285,7 +288,6 @@ export default function Dashboard() {
                     </td>
                     <td className="p-5 align-top">
                         <div className="flex flex-wrap gap-1.5 max-w-sm">
-                            {/* FIXED: Removed the .slice(0,4) that was deleting skills! */}
                             {job.required_skills && job.required_skills !== "Not specified in the provided text" ? (
                               job.required_skills.split(',').map((skill, index) => (
                                 <span key={index} className="bg-indigo-50 text-indigo-800 text-xs px-3 py-1 rounded-full font-semibold border border-indigo-100">
@@ -303,12 +305,21 @@ export default function Dashboard() {
                             {alertProps.text}
                         </div>
                         {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
-                        
-                        {/* ADDED: Display the Date Found */}
-                        {job.date_found && <p className="text-xs text-indigo-500 mt-1 font-mono">Found: {new Date(job.date_found).toLocaleDateString()}</p>}
                     </td>
+                    
+                    {/* ADDED: Status Badge Column */}
+                    <td className="p-5 align-top">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
+                        {job.status || 'Wishlist'}
+                      </span>
+                    </td>
+
+                    {/* ADDED: Created At Column */}
+                    <td className="p-5 align-top font-mono text-sm text-slate-600">
+                      {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
+                    </td>
+
                     <td className="p-5 align-top text-center">
-                      {/* FIXED: Safe URL checking so broken database entries don't crash the frontend */}
                       {job.apply_link && job.apply_link !== "Not specified in the provided text" ? (
                         <a 
                           href={job.apply_link.startsWith('http') ? job.apply_link : `https://${job.apply_link}`} 
@@ -324,7 +335,6 @@ export default function Dashboard() {
                       )}
                     </td>
                     
-                    {/* ADDED: Stealth Delete Button */}
                     <td className="p-5 align-middle">
                       <button
                         onClick={() => handleDelete(job.id)}
