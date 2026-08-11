@@ -110,14 +110,11 @@ export default function Dashboard() {
     setJobs(jobs.filter(job => job.id !== id));
   };
 
-  // ADDED: Function to toggle the "Applied" status when the checkbox is clicked
   const toggleAppliedStatus = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'Applied' ? 'Wishlist' : 'Applied';
     
-    // Update the UI immediately for a snappy feel
     setJobs(jobs.map(job => job.id === id ? { ...job, status: newStatus } : job));
 
-    // Update Supabase in the background
     const { error } = await supabase
       .from('job_applications')
       .update({ status: newStatus })
@@ -125,8 +122,15 @@ export default function Dashboard() {
 
     if (error) {
       alert("Failed to update status. Please try again.");
-      fetchJobs(); // Refresh if there is a database error
+      fetchJobs();
     }
+  };
+
+  // Helper to calculate days passed since the job was found
+  const getDaysPassed = (dateStr: string | null) => {
+    if (!dateStr) return 0;
+    const days = differenceInDays(new Date(), parseISO(dateStr));
+    return days < 0 ? 0 : days;
   };
 
   const getDeadlineAlertProps = (deadlineDate: string | null) => {
@@ -179,7 +183,6 @@ export default function Dashboard() {
       {/* --- QUICK STATS --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {[
-            // FIXED: 'Applied Total' now uses statCount('Applied') instead of jobs.length
             {label: 'Applied Total', value: statCount('Applied'), icon: BriefcaseIcon, color: 'text-indigo-600'},
             {label: 'Assessment Pending', value: statCount('Assessment'), icon: BoltIcon, color: 'text-amber-600'},
             {label: 'Active Interviews', value: statCount('Interview'), icon: CalendarDaysIcon, color: 'text-sky-600'},
@@ -257,19 +260,18 @@ export default function Dashboard() {
         </div>
         
         <div className="overflow-x-auto pb-4">
-          <table className="w-full text-left border-collapse min-w-[1400px]">
+          <table className="w-full text-left border-collapse min-w-[1500px]">
             <thead>
               <tr className="bg-slate-100/50 border-b border-slate-200">
-                {/* ADDED: Empty header for the checkbox column */}
                 <th className="p-5 w-12 text-center"></th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Company & Role</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Package</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Location</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Skills</th>
-                {/* FIXED: Changed Timeline to Deadline */}
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Deadline</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Date Added</th>
+                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Days Passed</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
                 <th className="p-5 w-10"></th> 
               </tr>
@@ -277,19 +279,21 @@ export default function Dashboard() {
             <tbody className="divide-y divide-slate-100">
               {jobs.length === 0 ? (
                 <tr>
-                    <td colSpan={10} className="text-center p-16 text-slate-500">
+                    <td colSpan={11} className="text-center p-16 text-slate-500">
                         <AcademicCapIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         No jobs added yet. Paste a career link above to begin.
                     </td>
                 </tr>
               ) : jobs.map((job) => {
                 const alertProps = getDeadlineAlertProps(job.deadline);
+                const targetDate = job.date_found || job.created_at;
+                const daysPassed = getDaysPassed(targetDate);
+
                 return (
                   <tr 
                     key={job.id} 
                     className={`transition-colors font-medium text-slate-950 group relative ${alertProps.rowClass}`}
                   >
-                    {/* ADDED: Checkbox Column */}
                     <td className="p-5 align-middle text-center">
                       <input 
                         type="checkbox" 
@@ -337,14 +341,20 @@ export default function Dashboard() {
                         {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
                     </td>
                     
+                    {/* Status Column: Green for Applied, Gray for Wishlist */}
                     <td className="p-5 align-top">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${job.status === 'Applied' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-200 text-slate-700'}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${job.status === 'Applied' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-700'}`}>
                         {job.status || 'Wishlist'}
                       </span>
                     </td>
 
                     <td className="p-5 align-top font-mono text-sm text-slate-600">
-                      {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
+                      {targetDate ? new Date(targetDate).toLocaleDateString() : 'N/A'}
+                    </td>
+
+                    {/* Days Passed Column */}
+                    <td className="p-5 align-top font-mono text-sm font-semibold text-indigo-600">
+                      {daysPassed} {daysPassed === 1 ? 'day ago' : 'days ago'}
                     </td>
 
                     <td className="p-5 align-top text-center">
