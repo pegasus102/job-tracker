@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
     // 4. Generate content using the official active gemini-3.6-flash model
     const aiResult = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-2.5-flash-lite',
       contents: prompt,
     });
 
