@@ -6,6 +6,10 @@ import { createClient } from '@supabase/supabase-js';
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
   apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    "HTTP-Referer": "https://vercel.app", // Optional, helps OpenRouter rank your app
+    "X-Title": "Job Tracker",
+  }
 });
 
 const supabase = createClient(
@@ -26,7 +30,7 @@ export async function POST(request: Request) {
     const pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 15000);
 
     const completion = await openai.chat.completions.create({
-      model: 'google/gemini-2.5-flash', // OpenRouter's stable Gemini routing string
+      model: 'google/gemini-2.5-flash',
       max_tokens: 1500,
       messages: [
         {
@@ -50,6 +54,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
+    console.error("OpenRouter Error:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
