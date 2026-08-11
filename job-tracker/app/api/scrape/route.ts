@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     const pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 15000);
 
     const completion = await openai.chat.completions.create({
-      model: 'google/gemini-flash-1.5', // OpenRouter handles routing automatically, or use 'meta-llama/llama-3-8b-instruct'
+      model: 'google/gemini-2.5-flash', // OpenRouter's stable Gemini routing string
       messages: [
         {
           role: 'system',
