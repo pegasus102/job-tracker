@@ -45,6 +45,12 @@ export async function POST(request: Request) {
     aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const jobData = JSON.parse(aiResponse);
 
+    // --- SAFETY FIX FOR DATES ---
+    if (!jobData.deadline || !/^\d{4}-\d{2}-\d{2}$/.test(jobData.deadline)) {
+      jobData.deadline = null;
+    }
+    // ----------------------------
+
     const { data, error } = await supabase
       .from('job_applications')
       .insert([jobData])
