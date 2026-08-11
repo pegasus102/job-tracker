@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const $ = cheerio.load(html);
     const pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 15000);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const prompt = `
       Analyze the following job description text and extract these fields into a strict JSON object. Do not include markdown formatting like \`\`\`json.
       {
