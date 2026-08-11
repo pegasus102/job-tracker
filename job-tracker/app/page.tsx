@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { differenceInDays, parseISO } from 'date-fns';
 import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon } from '@heroicons/react/24/solid';
 
-// 1. Database Interface - ADDED date_found
+// 1. Database Interface
 interface Job {
   id: string;
   company_name: string;
@@ -103,12 +103,30 @@ export default function Dashboard() {
     }
   };
 
-  // ADDED: Stealth Delete Function
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this job posting?")) return;
     
     await supabase.from('job_applications').delete().eq('id', id);
     setJobs(jobs.filter(job => job.id !== id));
+  };
+
+  // ADDED: Function to toggle the "Applied" status when the checkbox is clicked
+  const toggleAppliedStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'Applied' ? 'Wishlist' : 'Applied';
+    
+    // Update the UI immediately for a snappy feel
+    setJobs(jobs.map(job => job.id === id ? { ...job, status: newStatus } : job));
+
+    // Update Supabase in the background
+    const { error } = await supabase
+      .from('job_applications')
+      .update({ status: newStatus })
+      .eq('id', id);
+
+    if (error) {
+      alert("Failed to update status. Please try again.");
+      fetchJobs(); // Refresh if there is a database error
+    }
   };
 
   const getDeadlineAlertProps = (deadlineDate: string | null) => {
@@ -161,7 +179,8 @@ export default function Dashboard() {
       {/* --- QUICK STATS --- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {[
-            {label: 'Applied Total', value: jobs.length, icon: BriefcaseIcon, color: 'text-indigo-600'},
+            // FIXED: 'Applied Total' now uses statCount('Applied') instead of jobs.length
+            {label: 'Applied Total', value: statCount('Applied'), icon: BriefcaseIcon, color: 'text-indigo-600'},
             {label: 'Assessment Pending', value: statCount('Assessment'), icon: BoltIcon, color: 'text-amber-600'},
             {label: 'Active Interviews', value: statCount('Interview'), icon: CalendarDaysIcon, color: 'text-sky-600'},
             {label: 'Deadlines Over', value: statCount('Expired') + jobs.filter(j => j.deadline && differenceInDays(parseISO(j.deadline), new Date()) < 0).length, icon: ExclamationTriangleIcon, color: 'text-red-600'}
@@ -237,18 +256,18 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-slate-950">Active Job Pipeline</h2>
         </div>
         
-        {/* ADDED: min-w-[1200px] to table to force horizontal scrollbar and stop columns going hidden */}
-        {/* INCREASED min-w-[1400px] to make room for the new Status and Created At columns */}
         <div className="overflow-x-auto pb-4">
           <table className="w-full text-left border-collapse min-w-[1400px]">
             <thead>
               <tr className="bg-slate-100/50 border-b border-slate-200">
+                {/* ADDED: Empty header for the checkbox column */}
+                <th className="p-5 w-12 text-center"></th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Company & Role</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Package</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Location</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Skills</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Timeline</th>
-                {/* ADDED: Status and Date Added Headers */}
+                {/* FIXED: Changed Timeline to Deadline */}
+                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Deadline</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Date Added</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
@@ -258,7 +277,7 @@ export default function Dashboard() {
             <tbody className="divide-y divide-slate-100">
               {jobs.length === 0 ? (
                 <tr>
-                    <td colSpan={9} className="text-center p-16 text-slate-500">
+                    <td colSpan={10} className="text-center p-16 text-slate-500">
                         <AcademicCapIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         No jobs added yet. Paste a career link above to begin.
                     </td>
@@ -270,6 +289,17 @@ export default function Dashboard() {
                     key={job.id} 
                     className={`transition-colors font-medium text-slate-950 group relative ${alertProps.rowClass}`}
                   >
+                    {/* ADDED: Checkbox Column */}
+                    <td className="p-5 align-middle text-center">
+                      <input 
+                        type="checkbox" 
+                        checked={job.status === 'Applied'}
+                        onChange={() => toggleAppliedStatus(job.id, job.status)}
+                        className="w-5 h-5 text-indigo-600 bg-slate-100 border-slate-300 rounded cursor-pointer focus:ring-indigo-500"
+                        title="Mark as Applied"
+                      />
+                    </td>
+
                     <td className="p-5 align-top">
                         <p className="font-bold text-lg text-slate-950 leading-tight">{job.company_name}</p>
                         <p className="text-slate-700 flex items-center gap-1.5 mt-1">
@@ -307,14 +337,12 @@ export default function Dashboard() {
                         {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
                     </td>
                     
-                    {/* ADDED: Status Badge Column */}
                     <td className="p-5 align-top">
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-700">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${job.status === 'Applied' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 'bg-slate-200 text-slate-700'}`}>
                         {job.status || 'Wishlist'}
                       </span>
                     </td>
 
-                    {/* ADDED: Created At Column */}
                     <td className="p-5 align-top font-mono text-sm text-slate-600">
                       {job.created_at ? new Date(job.created_at).toLocaleDateString() : 'N/A'}
                     </td>
