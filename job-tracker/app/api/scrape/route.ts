@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize the Google GenAI client
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+const openai = new OpenAI({
+  baseURL: 'https://openrouter.ai/api/v1',
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
@@ -15,44 +17,29 @@ export async function POST(request: Request) {
   try {
     const { url } = await request.json();
 
-    // 1. Fetch webpage raw HTML
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
     const html = await response.text();
     
-    // 2. Extract plain text with Cheerio
     const $ = cheerio.load(html);
     const pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 15000);
 
-    // 3. Prompt for structuring the data
-    const prompt = `
-      Analyze the following job description text and extract these fields into a strict JSON object. Do not include markdown formatting like \`\`\`json.
-      {
-        "company_name": "String",
-        "role_offered": "String",
-        "package": "String (use 'N.D.' if not disclosed)",
-        "location": "String",
-        "required_skills": "String (comma separated)",
-        "deadline": "YYYY-MM-DD format (or null if not found)",
-        "apply_link": "String (the actual application link if mentioned, otherwise return '${url}')"
-      }
-      
-      Job Description Text:
-      ${pageText}
-    `;
-
-    // 4. Generate content using the official active gemini-3.6-flash model
-    const aiResult = await ai.models.generateContent({
-      model: 'gemini-3.0-flash',
-      contents: prompt,
+    const completion = await openai.chat.completions.create({
+      model: 'google/gemini-flash-1.5', // OpenRouter handles routing automatically, or use 'meta-llama/llama-3-8b-instruct'
+      messages: [
+        {
+          role: 'system',
+          content: 'Extract job details into a strict JSON object with keys: company_name, role_offered, package, location, required_skills, deadline, apply_link. Do not use markdown blocks.'
+        },
+        { role: 'user', content: pageText }
+      ]
     });
 
-    let rawText = aiResult.text || '';
-    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const jobData = JSON.parse(rawText);
+    let aiResponse = completion.choices[0].message.content || '';
+    aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    const jobData = JSON.parse(aiResponse);
 
-    // 5. Insert into Supabase
     const { data, error } = await supabase
       .from('job_applications')
       .insert([jobData])
@@ -62,19 +49,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error("Scraping Error:", error);
-    
-    const isRateLimit = error?.status === 429 || 
-                        error?.message?.includes('429') || 
-                        error?.message?.toLowerCase().includes('quota');
-
-    if (isRateLimit) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'RATE_LIMIT_EXCEEDED' 
-      }, { status: 429 });
-    }
-
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
