@@ -2,9 +2,9 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { differenceInDays, parseISO } from 'date-fns';
-import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon } from '@heroicons/react/24/solid';
 
-// 1. Database Interface
+// 1. Database Interface - ADDED date_found
 interface Job {
   id: string;
   company_name: string;
@@ -16,6 +16,7 @@ interface Job {
   apply_link: string;
   status: 'Wishlist' | 'Applied' | 'Assessment' | 'Interview' | 'Rejected' | 'Expired';
   created_at: string;
+  date_found: string | null;
 }
 
 const supabase = createClient(
@@ -82,7 +83,6 @@ export default function Dashboard() {
       });
 
       if (res.status === 429) {
-        // Set 30 min lockout for testing purposes, increase math for 3 hours later
         const lockoutTime = new Date().getTime() + (30 * 60 * 1000); 
         setLockoutUntil(lockoutTime);
         localStorage.setItem('api_lockout_time', lockoutTime.toString());
@@ -103,7 +103,14 @@ export default function Dashboard() {
     }
   };
 
-  // Modernized color logic with accessible palettes
+  // ADDED: Stealth Delete Function
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this job posting?")) return;
+    
+    await supabase.from('job_applications').delete().eq('id', id);
+    setJobs(jobs.filter(job => job.id !== id));
+  };
+
   const getDeadlineAlertProps = (deadlineDate: string | null) => {
     if (!deadlineDate) return { text: 'N/D', badgeClass: 'bg-zinc-100 text-zinc-700', rowClass: 'bg-white' };
     
@@ -131,7 +138,6 @@ export default function Dashboard() {
     }; 
   };
 
-  // Helper for Stats
   const statCount = (status: Job['status']) => jobs.filter(j => j.status === status).length;
 
   return (
@@ -194,7 +200,7 @@ export default function Dashboard() {
             <button 
               type="submit" 
               disabled={loading || lockoutUntil !== null} 
-              className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 whitespace-nowrap group shadow-lg shadow-indigo-100 active:scale-95"
+              className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-100 active:scale-95"
             >
               {loading ? (
                 <>
@@ -206,7 +212,7 @@ export default function Dashboard() {
                 </>
               ) : lockoutUntil ? 'API Limited' : (
                 <>
-                  <PlusIcon className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                  <PlusIcon className="w-5 h-5" />
                   Scrape & Save Opportunity
                 </>
               )}
@@ -231,22 +237,24 @@ export default function Dashboard() {
             <h2 className="text-xl font-bold text-slate-950">Active Job Pipeline</h2>
         </div>
         
+        {/* ADDED: min-w-[1200px] to table to force horizontal scrollbar and stop columns going hidden */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[1200px]">
             <thead>
               <tr className="bg-slate-100/50 border-b border-slate-200">
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Company & Role</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Package</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Location</th>
                 <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Skills</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Deadline</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Action</th>
+                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Timeline</th>
+                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
+                <th className="p-5 w-10"></th> {/* Empty header for delete button */}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {jobs.length === 0 ? (
                 <tr>
-                    <td colSpan={6} className="text-center p-16 text-slate-500">
+                    <td colSpan={7} className="text-center p-16 text-slate-500">
                         <AcademicCapIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         No jobs added yet. Paste a career link above to begin.
                     </td>
@@ -254,9 +262,10 @@ export default function Dashboard() {
               ) : jobs.map((job) => {
                 const alertProps = getDeadlineAlertProps(job.deadline);
                 return (
+                  // ADDED: "group relative" so we can hide/show the delete button on hover
                   <tr 
                     key={job.id} 
-                    className={`transition-colors font-medium text-slate-950 ${alertProps.rowClass}`}
+                    className={`transition-colors font-medium text-slate-950 group relative ${alertProps.rowClass}`}
                   >
                     <td className="p-5 align-top">
                         <p className="font-bold text-lg text-slate-950 leading-tight">{job.company_name}</p>
@@ -275,12 +284,17 @@ export default function Dashboard() {
                         </span>
                     </td>
                     <td className="p-5 align-top">
-                        <div className="flex flex-wrap gap-1.5">
-                            {job.required_skills?.split(',').slice(0,4).map(skill => (
-                                <span key={skill} className="bg-indigo-50 text-indigo-800 text-xs px-3 py-1 rounded-full font-semibold border border-indigo-100">
+                        <div className="flex flex-wrap gap-1.5 max-w-sm">
+                            {/* FIXED: Removed the .slice(0,4) that was deleting skills! */}
+                            {job.required_skills && job.required_skills !== "Not specified in the provided text" ? (
+                              job.required_skills.split(',').map((skill, index) => (
+                                <span key={index} className="bg-indigo-50 text-indigo-800 text-xs px-3 py-1 rounded-full font-semibold border border-indigo-100">
                                     {skill.trim()}
                                 </span>
-                            )) || 'N/A'}
+                              ))
+                            ) : (
+                              <span className="text-slate-400 text-xs italic">N/A</span>
+                            )}
                         </div>
                     </td>
                     <td className="p-5 align-top">
@@ -288,13 +302,37 @@ export default function Dashboard() {
                             <ClockIcon className="w-4 h-4" />
                             {alertProps.text}
                         </div>
-                        {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">Date: {job.deadline}</p>}
+                        {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
+                        
+                        {/* ADDED: Display the Date Found */}
+                        {job.date_found && <p className="text-xs text-indigo-500 mt-1 font-mono">Found: {new Date(job.date_found).toLocaleDateString()}</p>}
                     </td>
-                    <td className="p-5 align-top">
-                      <a href={job.apply_link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition shadow-md whitespace-nowrap active:scale-95">
-                        <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                        Apply Now
-                      </a>
+                    <td className="p-5 align-top text-center">
+                      {/* FIXED: Safe URL checking so broken database entries don't crash the frontend */}
+                      {job.apply_link && job.apply_link !== "Not specified in the provided text" ? (
+                        <a 
+                          href={job.apply_link.startsWith('http') ? job.apply_link : `https://${job.apply_link}`} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition shadow-md whitespace-nowrap active:scale-95"
+                        >
+                          <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
+                          Apply Now
+                        </a>
+                      ) : (
+                        <span className="text-red-500 text-sm font-bold">Link Broken</span>
+                      )}
+                    </td>
+                    
+                    {/* ADDED: Stealth Delete Button */}
+                    <td className="p-5 align-middle">
+                      <button
+                        onClick={() => handleDelete(job.id)}
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        title="Delete Job"
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
                     </td>
                   </tr>
                 );
