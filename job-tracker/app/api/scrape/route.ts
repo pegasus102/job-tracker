@@ -27,6 +27,7 @@ export async function POST(request: Request) {
 
     const completion = await openai.chat.completions.create({
       model: 'google/gemini-2.5-flash', // OpenRouter's stable Gemini routing string
+      max_tokens: 1500,
       messages: [
         {
           role: 'system',
