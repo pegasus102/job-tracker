@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+// The new SDK automatically detects your GEMINI_API_KEY environment variable
+const ai = new GoogleGenAI({});
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// 1. Add the Request type here
 export async function POST(request: Request) {
   try {
     const { url } = await request.json();
@@ -22,7 +22,6 @@ export async function POST(request: Request) {
     const $ = cheerio.load(html);
     const pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 15000);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const prompt = `
       Analyze the following job description text and extract these fields into a strict JSON object. Do not include markdown formatting like \`\`\`json.
       {
@@ -39,8 +38,14 @@ export async function POST(request: Request) {
       ${pageText}
     `;
 
-    const result = await model.generateContent(prompt);
-    let aiResponse = result.response.text();
+    // Using the new Interactions API and the 3.6-flash model
+    const interaction = await ai.interactions.create({
+      model: "gemini-2.5-flash-lite",
+      input: prompt
+    });
+
+    // The new SDK uses output_text instead of response.text()
+    let aiResponse = interaction.output_text || "";
     aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
     const jobData = JSON.parse(aiResponse);
 
