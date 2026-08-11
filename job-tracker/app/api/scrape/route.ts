@@ -3,8 +3,9 @@ import * as cheerio from 'cheerio';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
-// The new SDK automatically detects your GEMINI_API_KEY environment variable
-const ai = new GoogleGenAI({});
+// Initialize the NEW Google GenAI SDK
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       ${pageText}
     `;
 
-    // Using the new Interactions API and the 3.6-flash model
+    // Using the NEW Interactions API format with the lite model
     const interaction = await ai.interactions.create({
       model: "gemini-2.5-flash-lite",
       input: prompt
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error: any) {
-    console.error(error);
+    console.error("Scraping Error:", error);
     
     const isRateLimit = error?.status === 429 || 
                         error?.message?.includes('429') || 
