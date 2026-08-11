@@ -126,7 +126,6 @@ export default function Dashboard() {
     }
   };
 
-  // Helper to calculate days passed since the job was found
   const getDaysPassed = (dateStr: string | null) => {
     if (!dateStr) return 0;
     const days = differenceInDays(new Date(), parseISO(dateStr));
@@ -163,45 +162,45 @@ export default function Dashboard() {
   const statCount = (status: Job['status']) => jobs.filter(j => j.status === status).length;
 
   return (
-    <div className="p-6 md:p-10 min-h-screen bg-slate-50 text-slate-900 font-sans" suppressHydrationWarning>
+    <div className="p-4 md:p-10 min-h-screen bg-slate-50 text-slate-900 font-sans" suppressHydrationWarning>
       
       {/* --- HEADER --- */}
-      <div className="flex items-center justify-between mb-10 pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-950 flex items-center gap-2">
-            <AcademicCapIcon className="w-8 h-8 text-indigo-600" />
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 flex items-center gap-2">
+            <AcademicCapIcon className="w-7 h-7 sm:w-8 sm:h-8 text-indigo-600 flex-shrink-0" />
             Off-Campus Placement Hub
           </h1>
-          <p className="text-slate-600 mt-1">Keep track of every application link and deadline, automated.</p>
+          <p className="text-slate-600 mt-1 text-sm sm:text-base">Keep track of every application link and deadline, automated.</p>
         </div>
-        <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-200 text-center">
-            <p className="text-sm text-slate-500 font-medium">Synced Database</p>
-            <p className="text-2xl font-bold text-indigo-700">{jobs.length} <span className="text-lg font-medium text-slate-500">Opportunities</span></p>
+        <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-200 text-center w-full sm:w-auto">
+            <p className="text-xs sm:text-sm text-slate-500 font-medium">Synced Database</p>
+            <p className="text-xl sm:text-2xl font-bold text-indigo-700">{jobs.length} <span className="text-base sm:text-lg font-medium text-slate-500">Opportunities</span></p>
         </div>
       </div>
 
       {/* --- QUICK STATS --- */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
         {[
             {label: 'Applied Total', value: statCount('Applied'), icon: BriefcaseIcon, color: 'text-indigo-600'},
             {label: 'Assessment Pending', value: statCount('Assessment'), icon: BoltIcon, color: 'text-amber-600'},
             {label: 'Active Interviews', value: statCount('Interview'), icon: CalendarDaysIcon, color: 'text-sky-600'},
             {label: 'Deadlines Over', value: statCount('Expired') + jobs.filter(j => j.deadline && differenceInDays(parseISO(j.deadline), new Date()) < 0).length, icon: ExclamationTriangleIcon, color: 'text-red-600'}
         ].map(stat => (
-            <div key={stat.label} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-start gap-4">
-                <stat.icon className={`w-12 h-12 p-3 bg-slate-100 rounded-xl ${stat.color}`} />
+            <div key={stat.label} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 flex items-start gap-3 sm:gap-4">
+                <stat.icon className={`w-10 h-10 sm:w-12 sm:h-12 p-2.5 sm:p-3 bg-slate-100 rounded-xl flex-shrink-0 ${stat.color}`} />
                 <div>
-                    <p className="text-4xl font-extrabold text-slate-950">{stat.value}</p>
-                    <p className="text-sm font-semibold text-slate-600 mt-1">{stat.label}</p>
+                    <p className="text-2xl sm:text-4xl font-extrabold text-slate-950">{stat.value}</p>
+                    <p className="text-xs sm:text-sm font-semibold text-slate-600 mt-0.5 sm:mt-1">{stat.label}</p>
                 </div>
             </div>
         ))}
       </div>
       
       {/* --- INPUT CARD --- */}
-      <div className="bg-white p-8 rounded-3xl shadow-lg shadow-slate-100 border border-slate-200 mb-10">
-        <h2 className="text-xl font-bold mb-5 text-slate-950 flex items-center gap-2">
-          <LinkIcon className="w-6 h-6 text-indigo-500" />
+      <div className="bg-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-lg shadow-slate-100 border border-slate-200 mb-8">
+        <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 text-slate-950 flex items-center gap-2">
+          <LinkIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500" />
           Add New Placement Link
         </h2>
         
@@ -213,7 +212,7 @@ export default function Dashboard() {
                 type="url" 
                 required
                 placeholder="https://company.careers.com/job/software-engineer..." 
-                className="w-full pl-12 pr-4 py-4 border border-slate-300 rounded-2xl shadow-inner bg-slate-50 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition disabled:bg-slate-200 disabled:cursor-not-allowed text-slate-950"
+                className="w-full pl-12 pr-4 py-3 sm:py-4 border border-slate-300 rounded-xl sm:rounded-2xl shadow-inner bg-slate-50 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition disabled:bg-slate-200 disabled:cursor-not-allowed text-slate-950 text-sm sm:text-base"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={lockoutUntil !== null} 
@@ -222,7 +221,7 @@ export default function Dashboard() {
             <button 
               type="submit" 
               disabled={loading || lockoutUntil !== null} 
-              className="w-full md:w-auto bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-100 active:scale-95"
+              className="w-full md:w-auto bg-indigo-600 text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-100 active:scale-95 text-sm sm:text-base"
             >
               {loading ? (
                 <>
@@ -242,11 +241,11 @@ export default function Dashboard() {
           </div>
           
           {lockoutUntil && (
-            <div className="text-red-700 font-semibold bg-red-50 p-4 rounded-2xl border-2 border-red-200 inline-flex items-center gap-3 w-fit shadow-md">
-              <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
+            <div className="text-red-700 font-semibold bg-red-50 p-4 rounded-xl sm:rounded-2xl border-2 border-red-200 inline-flex items-center gap-3 w-full sm:w-fit shadow-md text-sm sm:text-base">
+              <ExclamationTriangleIcon className="w-8 h-8 text-red-600 flex-shrink-0" />
               <div>
                 <p>Gemini free tier limit reached.</p>
-                <p className="text-sm font-medium text-red-600">Please wait <span className="font-mono bg-white px-2 py-0.5 rounded border">{countdown}</span> before adding another link.</p>
+                <p className="text-xs sm:text-sm font-medium text-red-600">Please wait <span className="font-mono bg-white px-2 py-0.5 rounded border">{countdown}</span> before adding another link.</p>
               </div>
             </div>
           )}
@@ -254,33 +253,34 @@ export default function Dashboard() {
       </div>
 
       {/* --- DATABASE TABLE SECTION --- */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-200">
-            <h2 className="text-xl font-bold text-slate-950">Active Job Pipeline</h2>
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-5 sm:p-6 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-950">Active Job Pipeline</h2>
+            <span className="text-xs text-slate-400 block sm:hidden italic">Swipe table horizontally →</span>
         </div>
         
         <div className="overflow-x-auto pb-4">
           <table className="w-full text-left border-collapse min-w-[1500px]">
             <thead>
               <tr className="bg-slate-100/50 border-b border-slate-200">
-                <th className="p-5 w-12 text-center"></th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Company & Role</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Package</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Location</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Skills</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Deadline</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Date Added</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Days Passed</th>
-                <th className="p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
-                <th className="p-5 w-10"></th> 
+                <th className="p-4 sm:p-5 w-12 text-center"></th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Company & Role</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Package</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Location</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Skills</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Deadline</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Date Added</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Days Passed</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
+                <th className="p-4 sm:p-5 w-10"></th> 
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {jobs.length === 0 ? (
                 <tr>
-                    <td colSpan={11} className="text-center p-16 text-slate-500">
-                        <AcademicCapIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                    <td colSpan={11} className="text-center p-12 sm:p-16 text-slate-500">
+                        <AcademicCapIcon className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-3 sm:mb-4" />
                         No jobs added yet. Paste a career link above to begin.
                     </td>
                 </tr>
@@ -292,9 +292,9 @@ export default function Dashboard() {
                 return (
                   <tr 
                     key={job.id} 
-                    className={`transition-colors font-medium text-slate-950 group relative ${alertProps.rowClass}`}
+                    className={`transition-colors font-medium text-slate-950 group relative text-sm sm:text-base ${alertProps.rowClass}`}
                   >
-                    <td className="p-5 align-middle text-center">
+                    <td className="p-4 sm:p-5 align-middle text-center">
                       <input 
                         type="checkbox" 
                         checked={job.status === 'Applied'}
@@ -304,27 +304,27 @@ export default function Dashboard() {
                       />
                     </td>
 
-                    <td className="p-5 align-top">
-                        <p className="font-bold text-lg text-slate-950 leading-tight">{job.company_name}</p>
-                        <p className="text-slate-700 flex items-center gap-1.5 mt-1">
-                            <BriefcaseIcon className="w-4 h-4 text-indigo-400" />
+                    <td className="p-4 sm:p-5 align-top">
+                        <p className="font-bold text-base sm:text-lg text-slate-950 leading-tight">{job.company_name}</p>
+                        <p className="text-slate-700 flex items-center gap-1.5 mt-1 text-xs sm:text-sm">
+                            <BriefcaseIcon className="w-4 h-4 text-indigo-400 flex-shrink-0" />
                             {job.role_offered}
                         </p>
                     </td>
-                    <td className="p-5 align-top font-mono font-bold text-slate-700 tabular-nums">
+                    <td className="p-4 sm:p-5 align-top font-mono font-bold text-slate-700 tabular-nums">
                         {job.package}
                     </td>
-                    <td className="p-5 align-top">
+                    <td className="p-4 sm:p-5 align-top">
                         <span className="inline-flex items-center gap-1 text-slate-700">
-                            <MapPinIcon className="w-4 h-4 text-rose-400" />
+                            <MapPinIcon className="w-4 h-4 text-rose-400 flex-shrink-0" />
                             {job.location || 'Remote'}
                         </span>
                     </td>
-                    <td className="p-5 align-top">
+                    <td className="p-4 sm:p-5 align-top">
                         <div className="flex flex-wrap gap-1.5 max-w-sm">
                             {job.required_skills && job.required_skills !== "Not specified in the provided text" ? (
                               job.required_skills.split(',').map((skill, index) => (
-                                <span key={index} className="bg-indigo-50 text-indigo-800 text-xs px-3 py-1 rounded-full font-semibold border border-indigo-100">
+                                <span key={index} className="bg-indigo-50 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-semibold border border-indigo-100">
                                     {skill.trim()}
                                 </span>
                               ))
@@ -333,50 +333,48 @@ export default function Dashboard() {
                             )}
                         </div>
                     </td>
-                    <td className="p-5 align-top">
-                        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold shadow-inner ${alertProps.badgeClass}`}>
+                    <td className="p-4 sm:p-5 align-top">
+                        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-inner ${alertProps.badgeClass}`}>
                             <ClockIcon className="w-4 h-4" />
                             {alertProps.text}
                         </div>
                         {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
                     </td>
                     
-                    {/* Status Column: Green for Applied, Gray for Wishlist */}
-                    <td className="p-5 align-top">
+                    <td className="p-4 sm:p-5 align-top">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${job.status === 'Applied' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-700'}`}>
                         {job.status || 'Wishlist'}
                       </span>
                     </td>
 
-                    <td className="p-5 align-top font-mono text-sm text-slate-600">
+                    <td className="p-4 sm:p-5 align-top font-mono text-xs sm:text-sm text-slate-600">
                       {targetDate ? new Date(targetDate).toLocaleDateString() : 'N/A'}
                     </td>
 
-                    {/* Days Passed Column */}
-                    <td className="p-5 align-top font-mono text-sm font-semibold text-indigo-600">
+                    <td className="p-4 sm:p-5 align-top font-mono text-xs sm:text-sm font-semibold text-indigo-600">
                       {daysPassed} {daysPassed === 1 ? 'day ago' : 'days ago'}
                     </td>
 
-                    <td className="p-5 align-top text-center">
+                    <td className="p-4 sm:p-5 align-top text-center">
                       {job.apply_link && job.apply_link !== "Not specified in the provided text" ? (
                         <a 
                           href={job.apply_link.startsWith('http') ? job.apply_link : `https://${job.apply_link}`} 
                           target="_blank" 
                           rel="noreferrer" 
-                          className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-700 transition shadow-md whitespace-nowrap active:scale-95"
+                          className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-700 transition shadow-md whitespace-nowrap active:scale-95"
                         >
-                          <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
+                          <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                           Apply Now
                         </a>
                       ) : (
-                        <span className="text-red-500 text-sm font-bold">Link Broken</span>
+                        <span className="text-red-500 text-xs sm:text-sm font-bold">Link Broken</span>
                       )}
                     </td>
                     
-                    <td className="p-5 align-middle">
+                    <td className="p-4 sm:p-5 align-middle">
                       <button
                         onClick={() => handleDelete(job.id)}
-                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200"
                         title="Delete Job"
                       >
                         <TrashIcon className="w-5 h-5" />
