@@ -3,8 +3,8 @@ import * as cheerio from 'cheerio';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize the NEW Google GenAI SDK
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Initialize the Google GenAI client
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, 
@@ -15,14 +15,17 @@ export async function POST(request: Request) {
   try {
     const { url } = await request.json();
 
+    // 1. Fetch webpage raw HTML
     const response = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
     const html = await response.text();
     
+    // 2. Extract plain text with Cheerio
     const $ = cheerio.load(html);
     const pageText = $('body').text().replace(/\s+/g, ' ').substring(0, 15000);
 
+    // 3. Prompt for structuring the data
     const prompt = `
       Analyze the following job description text and extract these fields into a strict JSON object. Do not include markdown formatting like \`\`\`json.
       {
@@ -39,17 +42,17 @@ export async function POST(request: Request) {
       ${pageText}
     `;
 
-    // Using the NEW Interactions API format with the lite model
-    const interaction = await ai.interactions.create({
-      model: "gemini-2.5-flash-lite",
-      input: prompt
+    // 4. Generate content using the official active gemini-3.6-flash model
+    const aiResult = await ai.models.generateContent({
+      model: 'gemini-3.6-flash',
+      contents: prompt,
     });
 
-    // The new SDK uses output_text instead of response.text()
-    let aiResponse = interaction.output_text || "";
-    aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-    const jobData = JSON.parse(aiResponse);
+    let rawText = aiResult.text || '';
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const jobData = JSON.parse(rawText);
 
+    // 5. Insert into Supabase
     const { data, error } = await supabase
       .from('job_applications')
       .insert([jobData])
