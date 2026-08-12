@@ -12,10 +12,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Highest-stakes call in the whole app -> use the stronger model.
-// Swap to 'google/gemini-2.5-flash' (or a free OpenRouter model) if you want
-// to spend closer to ₹0/month; Pro is noticeably more literal/obedient to
-// strict JSON + rules, which matters most for this specific call.
 const MODEL = 'google/gemini-2.5-pro';
 
 function norm(s: string) {
@@ -140,9 +136,7 @@ export async function POST(request: Request) {
     raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     const aiResult = JSON.parse(raw);
 
-    // ---------- CODE-LEVEL GUARDRAILS (do not trust the model alone) ----------
-
-    // 1. Vault-matched projects: only ids that actually exist in the vault are kept.
+    // 1. Vault-matched projects
     const projectMap = new Map(vault.projects.map((p: any) => [p.id, p]));
     const experienceMap = new Map(vault.experience.map((e: any) => [e.id, e]));
 
@@ -161,8 +155,7 @@ export async function POST(request: Request) {
         };
       });
 
-    // 2. Vault-matched experience: only ids that actually exist. No inventions possible here,
-    //    by construction — there is no "added_experience" field in the schema at all.
+    // 2. Vault-matched experience
     const safeExperience = (aiResult.selected_experience || [])
       .filter((e: any) => experienceMap.has(e.id))
       .map((e: any) => {
@@ -178,8 +171,7 @@ export async function POST(request: Request) {
         };
       });
 
-    // 3. Certifications: STRICT selection only. Anything not verbatim in the vault is dropped
-    //    silently (never shown, never flagged as "added" — certifications are never invented).
+    // 3. Certifications
     const vaultCertSet = new Set([
       ...vault.certifications.map((c: any) => norm(c.name)),
       ...vault.extracurriculars.map((c: any) => norm(c.title)),
@@ -188,12 +180,12 @@ export async function POST(request: Request) {
       vaultCertSet.has(norm(cert))
     );
 
-    // 4. Skills: model may add up to 3 items not in the vault; anything unmatched gets
-    //    force-logged as an added item even if the model forgot to log it itself.
+    // 4. Skills
     const vaultSkillSet = new Set(
       vault.skills.flatMap((s: any) => (s.items || '').split(',').map((x: string) => norm(x)))
     );
-    const declaredAdditions = new Map(
+    // Explicitly typed as <string, any> to prevent TS error '{}'
+    const declaredAdditions = new Map<string, any>(
       (aiResult.ai_added_items || []).map((a: any) => [norm(a.item), a])
     );
 
@@ -208,15 +200,15 @@ export async function POST(request: Request) {
           finalAddedItems.push({
             section: 'Skills',
             item,
-            justification: declared?.justification || 'Added by AI as role-critical; not in your original vault — verify before submitting.',
+            // Safely cast to any
+            justification: (declared as any)?.justification || 'Added by AI as role-critical; not in your original vault — verify before submitting.',
           });
         }
       }
       return { category: cat.category, items: kept.join(', ') };
     });
 
-    // 5. New projects: allow AT MOST ONE, and require actual substance (proxy check —
-    //    the prompt carries the real quality bar, this just blocks empty/lazy output).
+    // 5. New projects
     const addedProjectsRaw = Array.isArray(aiResult.added_projects) ? aiResult.added_projects.slice(0, 1) : [];
     const newProjects = addedProjectsRaw
       .filter((p: any) => p?.title && Array.isArray(p.bullets) && p.bullets.filter((b: string) => (b || '').length > 25).length >= 2)
@@ -224,7 +216,8 @@ export async function POST(request: Request) {
         finalAddedItems.push({
           section: 'Projects',
           item: p.title,
-          justification: p.justification || 'Added by AI — not in your original vault. Only submit this if you can genuinely speak to it in an interview.',
+          // Safely cast to any
+          justification: (p as any).justification || 'Added by AI — not in your original vault. Only submit this if you can genuinely speak to it in an interview.',
         });
         return {
           id: `ai-project-${i}`,

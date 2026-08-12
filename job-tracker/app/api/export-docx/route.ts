@@ -124,7 +124,7 @@ export async function POST(request: Request) {
             spacing: { after: 20 },
             children: [
               new TextRun({ text: proj.title, bold: true, size: 20, font: FONT }),
-              proj.tech_stack ? new TextRun({ text: `  |  ${proj.tech_stack}`, italics: true, size: 19, font: FONT, color: '555555' }) : new TextRun({ text: '' }),
+              proj.tech_stack ? new TextRun({ text: `   |   ${proj.tech_stack}`, italics: true, size: 19, font: FONT, color: '555555' }) : new TextRun({ text: '' }),
             ],
           })
         );
@@ -169,7 +169,8 @@ export async function POST(request: Request) {
     const buffer = await Packer.toBuffer(doc);
     const filename = `${(job.company_name || 'CV').replace(/[^a-z0-9]/gi, '_')}_${(fixed.full_name || 'Resume').replace(/[^a-z0-9]/gi, '_')}.docx`;
 
-    return new NextResponse(buffer, {
+    // Wrapped buffer in new Uint8Array() to fix TypeScript BodyInit error
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
