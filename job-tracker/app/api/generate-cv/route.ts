@@ -137,8 +137,19 @@ export async function POST(request: Request) {
     });
 
     let raw = completion.choices[0].message.content || '{}';
-    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+
+// Extract strictly what is between the first '{' and the last '}'
+    const firstBracket = raw.indexOf('{');
+    const lastBracket = raw.lastIndexOf('}');
+
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      raw = raw.substring(firstBracket, lastBracket + 1);
+    } else {
+      raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    }
+
     const aiResult = JSON.parse(raw);
+    
 
     // ---------- CODE-LEVEL GUARDRAILS (do not trust the model alone) ----------
 
