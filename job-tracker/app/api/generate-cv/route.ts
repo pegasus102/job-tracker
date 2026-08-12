@@ -130,8 +130,10 @@ export async function POST(request: Request) {
       model: MODEL,
       max_tokens: 3000,
       temperature: 0.1,
+      // 👇 THIS FORCES THE AI TO OUTPUT ONLY RAW VALID JSON
+      response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: systemPrompt + ' You must output your final response as a valid JSON object.' },
         { role: 'user', content: JSON.stringify(userPayload) },
       ],
     });
