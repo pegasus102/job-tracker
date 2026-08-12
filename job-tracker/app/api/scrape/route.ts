@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'openrouter/free',
+      model: 'meta-llama/llama-3.1-8b-instruct:free',
       max_tokens: 1500,
       temperature: 0.1,
       messages: [
