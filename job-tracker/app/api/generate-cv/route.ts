@@ -107,13 +107,13 @@ export async function POST(request: Request) {
 
       Required JSON shape:
       {
-        "summary": "1-2 sentence professional summary grounded only in vault facts, or null",
-        "selected_skills": [{"category": "string", "items": "comma, separated, list"}],
-        "selected_projects": [{"id": "must match a vault.projects id exactly", "tailored_bullets": ["...", "..."]}],
-        "added_projects": [{"title": "string", "tech_stack": "string", "bullets": ["...", "..."], "justification": "string"}],
-        "selected_experience": [{"id": "must match a vault.experience id exactly", "tailored_bullets": ["...", "..."]}],
-        "selected_certifications": ["exact strings from vault.certifications or vault.extracurriculars only"],
-        "ai_added_items": [{"section": "Skills" | "Projects", "item": "string", "justification": "string"}]
+        "summary": "A 1-2 sentence professional summary grounded only in vault facts, or null",
+        "selected_skills": [{"category": "Languages", "items": "Python, JavaScript, C++"}],
+        "selected_projects": [{"id": "must match a vault.projects id exactly", "tailored_bullets": ["First tailored bullet point goes here.", "Second tailored bullet point goes here."]}],
+        "added_projects": [{"title": "Example Project Name", "tech_stack": "React, Node.js", "bullets": ["First project detail goes here.", "Second project detail goes here."], "justification": "Why this was added"}],
+        "selected_experience": [{"id": "must match a vault.experience id exactly", "tailored_bullets": ["First experience bullet goes here.", "Second experience bullet goes here."]}],
+        "selected_certifications": ["exact string from vault.certifications only"],
+        "ai_added_items": [{"section": "Skills", "item": "Docker", "justification": "Required by job description"}]
       }
     `;
 
