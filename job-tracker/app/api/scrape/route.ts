@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'meta-llama/llama-4-scout:free',
+      model: 'nvidia/nemotron-3-super-120b-a12b:free',
       max_tokens: 1500,
       temperature: 0.1,
       messages: [
