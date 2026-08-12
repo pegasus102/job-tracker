@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'google/gemini-2.5-flash',
+      model: 'openrouter/free',
       max_tokens: 1500,
       temperature: 0.1,
       messages: [
