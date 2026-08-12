@@ -136,16 +136,19 @@ export async function POST(request: Request) {
       ],
     });
 
+    // ✅ FIXED CODE
     let raw = completion.choices[0].message.content || '{}';
 
-// Extract strictly what is between the first '{' and the last '}'
+// Strip markdown fences
+    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+
+// Find the very first '{' and the matching last '}' to completely discard 
+// any extra conversational text or double-json the AI appends at the end.
     const firstBracket = raw.indexOf('{');
     const lastBracket = raw.lastIndexOf('}');
 
     if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
       raw = raw.substring(firstBracket, lastBracket + 1);
-    } else {
-      raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     }
 
     const aiResult = JSON.parse(raw);
