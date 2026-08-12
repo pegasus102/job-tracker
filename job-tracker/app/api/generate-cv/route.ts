@@ -16,7 +16,7 @@ const supabase = createClient(
 // Swap to 'google/gemini-2.5-flash' (or a free OpenRouter model) if you want
 // to spend closer to ₹0/month; Pro is noticeably more literal/obedient to
 // strict JSON + rules, which matters most for this specific call.
-const MODEL = 'google/gemma-4-31b-it:free';
+const MODEL = 'inclusionai/ling-3.0-flash:free';
 
 function norm(s: string) {
   return (s || '').toLowerCase().trim();

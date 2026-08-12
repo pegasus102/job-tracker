@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'google/gemma-4-31b-it:free',
+      model: 'inclusionai/ling-3.0-flash:free',
       max_tokens: 1500,
       temperature: 0.1,
       messages: [
