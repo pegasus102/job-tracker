@@ -2,7 +2,9 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { differenceInDays, parseISO } from 'date-fns';
-import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon, SparklesIcon, UserCircleIcon } from '@heroicons/react/24/solid';
+import MasterProfileModal from '../components/MasterProfileModal';
+import AuditDrawer from '../components/AuditDrawer';
 
 // 1. Database Interface
 interface Job {
@@ -17,6 +19,11 @@ interface Job {
   status: 'Wishlist' | 'Applied' | 'Assessment' | 'Interview' | 'Rejected' | 'Expired';
   created_at: string;
   date_found: string | null;
+  // --- CV tailoring fields ---
+  cv_status?: 'Not Generated' | 'Researching' | 'Generating' | 'Generated' | 'Failed';
+  research_insights?: any;
+  ai_added_items?: { section: string; item: string; justification: string }[];
+  tailored_cv_json?: any;
 }
 
 const supabase = createClient(
@@ -28,9 +35,14 @@ export default function Dashboard() {
   const [url, setUrl] = useState<string>('');
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  
+
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<string>('');
+
+  // --- CV tailoring UI state ---
+  const [showMasterProfile, setShowMasterProfile] = useState(false);
+  const [tailoringId, setTailoringId] = useState<string | null>(null);
+  const [auditJob, setAuditJob] = useState<Job | null>(null);
 
   useEffect(() => {
     fetchJobs();
@@ -74,7 +86,7 @@ export default function Dashboard() {
     e.preventDefault();
     if (!url) return;
     setLoading(true);
-    
+
     try {
       const res = await fetch('/api/scrape', {
         method: 'POST',
@@ -83,10 +95,10 @@ export default function Dashboard() {
       });
 
       if (res.status === 429) {
-        const lockoutTime = new Date().getTime() + (30 * 60 * 1000); 
+        const lockoutTime = new Date().getTime() + (30 * 60 * 1000);
         setLockoutUntil(lockoutTime);
         localStorage.setItem('api_lockout_time', lockoutTime.toString());
-        return; 
+        return;
       }
 
       if (res.ok) {
@@ -105,14 +117,14 @@ export default function Dashboard() {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this job posting?")) return;
-    
+
     await supabase.from('job_applications').delete().eq('id', id);
     setJobs(jobs.filter(job => job.id !== id));
   };
 
   const toggleAppliedStatus = async (id: string, currentStatus: string) => {
     const newStatus = currentStatus === 'Applied' ? 'Wishlist' : 'Applied';
-    
+
     setJobs(jobs.map(job => job.id === id ? { ...job, status: newStatus } : job));
 
     const { error } = await supabase
@@ -126,6 +138,39 @@ export default function Dashboard() {
     }
   };
 
+  // --- CV tailoring flow: research the role, then generate the tailored CV ---
+  const handleTailorCV = async (job: Job) => {
+    setTailoringId(job.id);
+    try {
+      const researchRes = await fetch('/api/research-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: job.id }),
+      });
+      if (!researchRes.ok) {
+        const err = await researchRes.json().catch(() => ({}));
+        throw new Error(err.error || 'Research step failed');
+      }
+
+      const genRes = await fetch('/api/generate-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: job.id }),
+      });
+      if (!genRes.ok) {
+        const err = await genRes.json().catch(() => ({}));
+        throw new Error(err.error || 'CV generation failed');
+      }
+
+      await fetchJobs();
+    } catch (e: any) {
+      alert(`Couldn't tailor CV: ${e.message}`);
+      fetchJobs();
+    } finally {
+      setTailoringId(null);
+    }
+  };
+
   const getDaysPassed = (dateStr: string | null) => {
     if (!dateStr) return 0;
     const days = differenceInDays(new Date(), parseISO(dateStr));
@@ -134,36 +179,36 @@ export default function Dashboard() {
 
   const getDeadlineAlertProps = (deadlineDate: string | null) => {
     if (!deadlineDate) return { text: 'N/D', badgeClass: 'bg-zinc-100 text-zinc-700', rowClass: 'bg-white' };
-    
+
     const daysLeft = differenceInDays(parseISO(deadlineDate), new Date());
-    
-    if (daysLeft < 0) return { 
-      text: 'Expired', 
-      badgeClass: 'bg-slate-200 text-slate-700', 
-      rowClass: 'bg-slate-50 text-slate-500 border-slate-200' 
-    }; 
-    if (daysLeft <= 2) return { 
-      text: `${daysLeft === 0 ? 'Today' : `${daysLeft} days left`}`, 
-      badgeClass: 'bg-red-100 text-red-800 border border-red-200', 
-      rowClass: 'bg-red-50' 
-    }; 
-    if (daysLeft <= 7) return { 
-      text: `${daysLeft} days left`, 
-      badgeClass: 'bg-amber-100 text-amber-900 border border-amber-200', 
-      rowClass: 'bg-amber-50' 
-    }; 
-    return { 
-      text: `${daysLeft} days left`, 
-      badgeClass: 'bg-emerald-100 text-emerald-900 border border-emerald-200', 
-      rowClass: 'bg-emerald-50' 
-    }; 
+
+    if (daysLeft < 0) return {
+      text: 'Expired',
+      badgeClass: 'bg-slate-200 text-slate-700',
+      rowClass: 'bg-slate-50 text-slate-500 border-slate-200'
+    };
+    if (daysLeft <= 2) return {
+      text: `${daysLeft === 0 ? 'Today' : `${daysLeft} days left`}`,
+      badgeClass: 'bg-red-100 text-red-800 border border-red-200',
+      rowClass: 'bg-red-50'
+    };
+    if (daysLeft <= 7) return {
+      text: `${daysLeft} days left`,
+      badgeClass: 'bg-amber-100 text-amber-900 border border-amber-200',
+      rowClass: 'bg-amber-50'
+    };
+    return {
+      text: `${daysLeft} days left`,
+      badgeClass: 'bg-emerald-100 text-emerald-900 border border-emerald-200',
+      rowClass: 'bg-emerald-50'
+    };
   };
 
   const statCount = (status: Job['status']) => jobs.filter(j => j.status === status).length;
 
   return (
     <div className="p-4 md:p-10 min-h-screen bg-slate-50 text-slate-900 font-sans" suppressHydrationWarning>
-      
+
       {/* --- HEADER --- */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 pb-4 border-b border-slate-200">
         <div>
@@ -173,9 +218,18 @@ export default function Dashboard() {
           </h1>
           <p className="text-slate-600 mt-1 text-sm sm:text-base">Keep track of every application link and deadline, automated.</p>
         </div>
-        <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-200 text-center w-full sm:w-auto">
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">Synced Database</p>
-            <p className="text-xl sm:text-2xl font-bold text-indigo-700">{jobs.length} <span className="text-base sm:text-lg font-medium text-slate-500">Opportunities</span></p>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            onClick={() => setShowMasterProfile(true)}
+            className="flex items-center gap-2 bg-white border border-slate-200 shadow-sm px-4 py-3 rounded-2xl font-semibold text-slate-700 hover:bg-slate-50 text-sm whitespace-nowrap"
+          >
+            <UserCircleIcon className="w-5 h-5 text-indigo-600" />
+            Master Profile
+          </button>
+          <div className="bg-white p-3 rounded-2xl shadow-inner border border-slate-200 text-center flex-1 sm:flex-none sm:w-auto">
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">Synced Database</p>
+              <p className="text-xl sm:text-2xl font-bold text-indigo-700">{jobs.length} <span className="text-base sm:text-lg font-medium text-slate-500">Opportunities</span></p>
+          </div>
         </div>
       </div>
 
@@ -196,31 +250,31 @@ export default function Dashboard() {
             </div>
         ))}
       </div>
-      
+
       {/* --- INPUT CARD --- */}
       <div className="bg-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-lg shadow-slate-100 border border-slate-200 mb-8">
         <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-5 text-slate-950 flex items-center gap-2">
           <LinkIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500" />
           Add New Placement Link
         </h2>
-        
+
         <form onSubmit={handleAddJob} className="flex flex-col gap-4" suppressHydrationWarning>
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <div className="relative flex-1 w-full">
               <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input 
-                type="url" 
+              <input
+                type="url"
                 required
-                placeholder="https://company.careers.com/job/software-engineer..." 
+                placeholder="https://company.careers.com/job/software-engineer..."
                 className="w-full pl-12 pr-4 py-3 sm:py-4 border border-slate-300 rounded-xl sm:rounded-2xl shadow-inner bg-slate-50 focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition disabled:bg-slate-200 disabled:cursor-not-allowed text-slate-950 text-sm sm:text-base"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                disabled={lockoutUntil !== null} 
+                disabled={lockoutUntil !== null}
               />
             </div>
-            <button 
-              type="submit" 
-              disabled={loading || lockoutUntil !== null} 
+            <button
+              type="submit"
+              disabled={loading || lockoutUntil !== null}
               className="w-full md:w-auto bg-indigo-600 text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl sm:rounded-2xl font-bold hover:bg-indigo-700 disabled:bg-slate-400 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-100 active:scale-95 text-sm sm:text-base"
             >
               {loading ? (
@@ -239,7 +293,7 @@ export default function Dashboard() {
               )}
             </button>
           </div>
-          
+
           {lockoutUntil && (
             <div className="text-red-700 font-semibold bg-red-50 p-4 rounded-xl sm:rounded-2xl border-2 border-red-200 inline-flex items-center gap-3 w-full sm:w-fit shadow-md text-sm sm:text-base">
               <ExclamationTriangleIcon className="w-8 h-8 text-red-600 flex-shrink-0" />
@@ -258,9 +312,9 @@ export default function Dashboard() {
             <h2 className="text-lg sm:text-xl font-bold text-slate-950">Active Job Pipeline</h2>
             <span className="text-xs text-slate-400 block sm:hidden italic">Swipe table horizontally →</span>
         </div>
-        
+
         <div className="overflow-x-auto pb-4">
-          <table className="w-full text-left border-collapse min-w-[1500px]">
+          <table className="w-full text-left border-collapse min-w-[1700px]">
             <thead>
               <tr className="bg-slate-100/50 border-b border-slate-200">
                 <th className="p-4 sm:p-5 w-12 text-center"></th>
@@ -272,14 +326,15 @@ export default function Dashboard() {
                 <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Status</th>
                 <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Date Added</th>
                 <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider">Days Passed</th>
+                <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Tailored CV</th>
                 <th className="p-4 sm:p-5 text-xs font-bold text-slate-600 uppercase tracking-wider text-center">Action</th>
-                <th className="p-4 sm:p-5 w-10"></th> 
+                <th className="p-4 sm:p-5 w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {jobs.length === 0 ? (
                 <tr>
-                    <td colSpan={11} className="text-center p-12 sm:p-16 text-slate-500">
+                    <td colSpan={12} className="text-center p-12 sm:p-16 text-slate-500">
                         <AcademicCapIcon className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-3 sm:mb-4" />
                         No jobs added yet. Paste a career link above to begin.
                     </td>
@@ -288,15 +343,17 @@ export default function Dashboard() {
                 const alertProps = getDeadlineAlertProps(job.deadline);
                 const targetDate = job.date_found || job.created_at;
                 const daysPassed = getDaysPassed(targetDate);
+                const isTailoring = tailoringId === job.id;
+                const cvStatus = job.cv_status || 'Not Generated';
 
                 return (
-                  <tr 
-                    key={job.id} 
+                  <tr
+                    key={job.id}
                     className={`transition-colors font-medium text-slate-950 group relative text-sm sm:text-base ${alertProps.rowClass}`}
                   >
                     <td className="p-4 sm:p-5 align-middle text-center">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={job.status === 'Applied'}
                         onChange={() => toggleAppliedStatus(job.id, job.status)}
                         className="w-5 h-5 text-indigo-600 bg-slate-100 border-slate-300 rounded cursor-pointer focus:ring-indigo-500"
@@ -340,7 +397,7 @@ export default function Dashboard() {
                         </div>
                         {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
                     </td>
-                    
+
                     <td className="p-4 sm:p-5 align-top">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${job.status === 'Applied' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-200 text-slate-700'}`}>
                         {job.status || 'Wishlist'}
@@ -355,12 +412,41 @@ export default function Dashboard() {
                       {daysPassed} {daysPassed === 1 ? 'day ago' : 'days ago'}
                     </td>
 
+                    {/* --- Tailored CV column --- */}
+                    <td className="p-4 sm:p-5 align-top text-center">
+                      {isTailoring ? (
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          {cvStatus === 'Researching' ? 'Researching...' : 'Tailoring...'}
+                        </span>
+                      ) : cvStatus === 'Generated' ? (
+                        <button
+                          onClick={() => setAuditJob(job)}
+                          className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-amber-100"
+                        >
+                          <SparklesIcon className="w-4 h-4" />
+                          {job.ai_added_items?.length || 0} Added — View
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleTailorCV(job)}
+                          className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-indigo-100"
+                        >
+                          <SparklesIcon className="w-4 h-4" />
+                          {cvStatus === 'Failed' ? 'Retry Tailor CV' : 'Tailor CV'}
+                        </button>
+                      )}
+                    </td>
+
                     <td className="p-4 sm:p-5 align-top text-center">
                       {job.apply_link && job.apply_link !== "Not specified in the provided text" ? (
-                        <a 
-                          href={job.apply_link.startsWith('http') ? job.apply_link : `https://${job.apply_link}`} 
-                          target="_blank" 
-                          rel="noreferrer" 
+                        <a
+                          href={job.apply_link.startsWith('http') ? job.apply_link : `https://${job.apply_link}`}
+                          target="_blank"
+                          rel="noreferrer"
                           className="inline-flex items-center gap-1.5 bg-slate-900 text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold hover:bg-slate-700 transition shadow-md whitespace-nowrap active:scale-95"
                         >
                           <CheckCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
@@ -370,7 +456,7 @@ export default function Dashboard() {
                         <span className="text-red-500 text-xs sm:text-sm font-bold">Link Broken</span>
                       )}
                     </td>
-                    
+
                     <td className="p-4 sm:p-5 align-middle">
                       <button
                         onClick={() => handleDelete(job.id)}
@@ -387,6 +473,17 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
+      {showMasterProfile && <MasterProfileModal onClose={() => setShowMasterProfile(false)} />}
+      {auditJob && (
+        <AuditDrawer
+          jobId={auditJob.id}
+          companyName={auditJob.company_name}
+          addedItems={auditJob.ai_added_items || []}
+          research={auditJob.research_insights || null}
+          onClose={() => setAuditJob(null)}
+        />
+      )}
     </div>
   );
 }

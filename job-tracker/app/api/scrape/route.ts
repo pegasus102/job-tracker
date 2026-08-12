@@ -9,7 +9,7 @@ const openai = new OpenAI({
 });
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
@@ -18,27 +18,27 @@ export async function POST(request: Request) {
     const { url } = await request.json();
 
     const response = await fetch(url, {
-      headers: { 
+      headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9'
       }
     });
     const html = await response.text();
-    
+
     const $ = cheerio.load(html);
-    
+
     // 1. SECRET WEAPON: Extract hidden JSON-LD (Google Jobs SEO data) before we clean the page
     let hiddenSeoData = '';
     $('script[type="application/ld+json"]').each((_, el) => {
       hiddenSeoData += $(el).html() + '\n';
     });
-    
+
     // 2. Fixed Cleaning: Removed 'header' so we don't accidentally delete the location text!
     $('script:not([type="application/ld+json"]), style, noscript, nav, footer, iframe, svg, [role="navigation"], .cookie-banner').remove();
-    
+
     let pageText = '';
     const targetContainers = $('main, article, [class*="job-description"], [id*="job-description"], [data-automation-id="job-posting-details"]');
-    
+
     if (targetContainers.length > 0) {
       pageText = targetContainers.text();
     } else {
@@ -95,6 +95,9 @@ export async function POST(request: Request) {
     // Hardcode reliable fields
     jobData.apply_link = url;
     jobData.date_found = new Date().toISOString();
+
+    // NEW: keep the full cleaned JD text so /api/generate-cv has real context to work from later.
+    jobData.job_description_raw = pageText;
 
     if (!jobData.deadline || !/^\d{4}-\d{2}-\d{2}$/.test(jobData.deadline)) {
       jobData.deadline = null;
