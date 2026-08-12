@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     `;
 
     const completion = await openai.chat.completions.create({
-      model: 'inclusionai/ling-3.0-flash:free',
+      model: 'meta-llama/llama-4-scout:free',
       max_tokens: 1500,
       temperature: 0.1,
       messages: [
