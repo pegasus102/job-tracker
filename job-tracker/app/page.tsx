@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { differenceInDays, parseISO } from 'date-fns';
-import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon, SparklesIcon, UserCircleIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon, SparklesIcon, UserCircleIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
 import MasterProfileModal from '../components/MasterProfileModal';
 import AuditDrawer from '../components/AuditDrawer';
 
@@ -423,13 +423,22 @@ export default function Dashboard() {
                           {cvStatus === 'Researching' ? 'Researching...' : 'Tailoring...'}
                         </span>
                       ) : cvStatus === 'Generated' ? (
-                        <button
-                          onClick={() => setAuditJob(job)}
-                          className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-amber-100"
-                        >
-                          <SparklesIcon className="w-4 h-4" />
-                          {job.ai_added_items?.length || 0} Added — View
-                        </button>
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => setAuditJob(job)}
+                            className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-full text-xs font-bold hover:bg-amber-100"
+                          >
+                            <SparklesIcon className="w-4 h-4" />
+                            {job.ai_added_items?.length || 0} Added — View
+                          </button>
+                          <button
+                            onClick={() => handleTailorCV(job)}
+                            title="Regenerate CV"
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full"
+                          >
+                            <ArrowPathIcon className="w-4 h-4" />
+                          </button>
+                        </div>
                       ) : (
                         <button
                           onClick={() => handleTailorCV(job)}

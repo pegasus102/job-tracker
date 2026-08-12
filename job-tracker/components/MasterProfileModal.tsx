@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { XMarkIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/solid';
 
-interface Education { degree: string; institution: string; start_date: string; end_date: string; cgpa: string; }
+interface Education { degree: string; institution: string; start_date: string; end_date: string; cgpa: string; score_type: 'CGPA' | 'Score'; }
 interface SkillCategory { category: string; items: string; }
 interface Project { id: string; title: string; tech_stack: string; bullets: string[]; }
 interface Experience { id: string; role: string; company: string; duration: string; bullets: string[]; }
@@ -25,6 +25,8 @@ export default function MasterProfileModal({ onClose }: { onClose: () => void })
   const [fixed, setFixed] = useState<FixedDetails>({
     full_name: '', phone: '', email: '', linkedin: '', github: '', portfolio: '', education: [],
   });
+  const normalizeEducation = (edu: any[]): Education[] =>
+    (edu || []).map((e) => ({ score_type: 'CGPA', ...e }));
   const [skills, setSkills] = useState<SkillCategory[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [experience, setExperience] = useState<Experience[]>([]);
@@ -37,7 +39,9 @@ export default function MasterProfileModal({ onClose }: { onClose: () => void })
         const res = await fetch('/api/master-profile');
         const json = await res.json();
         if (json.success && json.data) {
-          setFixed({ full_name: '', phone: '', email: '', linkedin: '', github: '', portfolio: '', education: [], ...json.data.fixed_details });
+          const loadedFixed = { full_name: '', phone: '', email: '', linkedin: '', github: '', portfolio: '', education: [], ...json.data.fixed_details };
+          loadedFixed.education = normalizeEducation(loadedFixed.education);
+          setFixed(loadedFixed);
           setSkills(json.data.master_skills || []);
           setProjects(json.data.master_projects || []);
           setExperience(json.data.master_experience || []);
@@ -117,16 +121,23 @@ export default function MasterProfileModal({ onClose }: { onClose: () => void })
 
                   <div className="flex items-center justify-between mt-4">
                     <h3 className="font-bold text-slate-800 text-sm">Education</h3>
-                    <button onClick={() => setFixed({ ...fixed, education: [...fixed.education, { degree: '', institution: '', start_date: '', end_date: '', cgpa: '' }] })} className="text-indigo-600 text-xs font-semibold flex items-center gap-1"><PlusIcon className="w-4 h-4" />Add</button>
+                    <button onClick={() => setFixed({ ...fixed, education: [...fixed.education, { degree: '', institution: '', start_date: '', end_date: '', cgpa: '', score_type: 'CGPA' }] })} className="text-indigo-600 text-xs font-semibold flex items-center gap-1"><PlusIcon className="w-4 h-4" />Add</button>
                   </div>
                   {fixed.education.map((edu, i) => (
-                    <div key={i} className="grid grid-cols-5 gap-2 items-end bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div key={i} className="grid grid-cols-6 gap-2 items-end bg-slate-50 p-3 rounded-xl border border-slate-200">
                       <div className="col-span-2"><label className={labelCls}>Degree</label><input className={inputCls} value={edu.degree} onChange={(e) => { const arr = [...fixed.education]; arr[i].degree = e.target.value; setFixed({ ...fixed, education: arr }); }} /></div>
                       <div className="col-span-2"><label className={labelCls}>Institution</label><input className={inputCls} value={edu.institution} onChange={(e) => { const arr = [...fixed.education]; arr[i].institution = e.target.value; setFixed({ ...fixed, education: arr }); }} /></div>
-                      <button onClick={() => setFixed({ ...fixed, education: fixed.education.filter((_, idx) => idx !== i) })} className="p-2 text-red-500"><TrashIcon className="w-4 h-4" /></button>
                       <div><label className={labelCls}>Start</label><input className={inputCls} value={edu.start_date} onChange={(e) => { const arr = [...fixed.education]; arr[i].start_date = e.target.value; setFixed({ ...fixed, education: arr }); }} /></div>
+                      <button onClick={() => setFixed({ ...fixed, education: fixed.education.filter((_, idx) => idx !== i) })} className="p-2 text-red-500"><TrashIcon className="w-4 h-4" /></button>
                       <div><label className={labelCls}>End</label><input className={inputCls} value={edu.end_date} onChange={(e) => { const arr = [...fixed.education]; arr[i].end_date = e.target.value; setFixed({ ...fixed, education: arr }); }} /></div>
-                      <div><label className={labelCls}>CGPA</label><input className={inputCls} value={edu.cgpa} onChange={(e) => { const arr = [...fixed.education]; arr[i].cgpa = e.target.value; setFixed({ ...fixed, education: arr }); }} /></div>
+                      <div>
+                        <label className={labelCls}>Score Type</label>
+                        <select className={inputCls} value={edu.score_type || 'CGPA'} onChange={(e) => { const arr = [...fixed.education]; arr[i].score_type = e.target.value as 'CGPA' | 'Score'; setFixed({ ...fixed, education: arr }); }}>
+                          <option value="CGPA">CGPA</option>
+                          <option value="Score">Score (%)</option>
+                        </select>
+                      </div>
+                      <div><label className={labelCls}>{edu.score_type === 'Score' ? 'Percentage' : 'CGPA'} Value</label><input className={inputCls} value={edu.cgpa} onChange={(e) => { const arr = [...fixed.education]; arr[i].cgpa = e.target.value; setFixed({ ...fixed, education: arr }); }} /></div>
                     </div>
                   ))}
                 </div>
