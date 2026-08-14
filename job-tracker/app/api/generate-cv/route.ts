@@ -194,11 +194,13 @@ export async function POST(request: Request) {
       });
 
     // 3. Certifications & Extracurriculars: NEVER passed through the AI at all — every entry
-    //    in your vault is included as-is, every time. Nothing to filter, nothing to lose.
-    const finalCertifications = [
-      ...vault.certifications.map((c: any) => (c.issuer ? `${c.name} — ${c.issuer}` : c.name)).filter(Boolean),
-      ...vault.extracurriculars.map((ex: any) => (ex.detail ? `${ex.title} — ${ex.detail}` : ex.title)).filter(Boolean),
-    ];
+    //    in your vault is included as-is, every time, kept as two SEPARATE lists.
+    const finalCertifications = vault.certifications
+      .map((c: any) => (c.issuer ? `${c.name} — ${c.issuer}` : c.name))
+      .filter(Boolean);
+    const finalExtracurriculars = vault.extracurriculars
+      .map((ex: any) => (ex.detail ? `${ex.title} — ${ex.detail}` : ex.title))
+      .filter(Boolean);
 
     // 4. Skills: model may add up to 3 items not in the vault; anything unmatched gets
     //    force-logged as an added item even if the model forgot to log it itself.
@@ -227,37 +229,68 @@ export async function POST(request: Request) {
       return { category: cat.category, items: kept.join(', ') };
     });
 
-    // 5. New projects: allow AT MOST ONE, and require actual substance (proxy check — the
-    //    prompt carries the real quality/complexity bar, this just blocks empty/lazy output).
-    const addedProjectsRaw = Array.isArray(aiResult.added_projects) ? aiResult.added_projects.slice(0, 1) : [];
-    const newProjects = addedProjectsRaw
-      .filter((p: any) => p?.title && Array.isArray(p.bullets) && p.bullets.filter((b: string) => (b || '').length > 25).length >= 2)
-      .map((p: any, i: number) => {
-        finalAddedItems.push({
-          section: 'Projects',
-          item: p.title,
-          justification: p.justification || 'Added by AI — not in your original vault. Only submit this if you can genuinely speak to it in an interview.',
-        });
-        return {
-          id: `ai-project-${i}`,
-          title: p.title,
-          tech_stack: p.tech_stack || '',
-          bullets: p.bullets,
-          is_ai_added: true,
-        };
-      });
+    // 5. Projects — three layers, in order of preference:
+    //    a) AI-tailored selections (already computed above as safeProjects)
+    //    b) Real vault projects the AI didn't pick, added back verbatim so a flaky model
+    //       skipping a project never means losing a REAL project you actually have
+    //    c) Only if the vault itself has fewer than 3 projects total, one AI-generated
+    //       filler project — via a small, focused follow-up call (see below), not left to
+    //       chance in the same giant response that handles everything else.
+    const selectedProjectIds = new Set(safeProjects.map((p: any) => norm(p.id)));
+    const leftoverVaultProjects = vault.projects
+      .filter((p: any) => !selectedProjectIds.has(norm(p.id)))
+      .map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        tech_stack: p.tech_stack,
+        bullets: p.bullets,
+        is_ai_added: false,
+      }));
 
-    // 6. Hard cap: final Projects section is exactly 3 max, with the added project (if any)
-    //    always preserved rather than accidentally dropped by a naive slice.
-    const maxSelectedSlots = Math.max(3 - newProjects.length, 0);
-    const trimmedSelectedProjects = safeProjects.slice(0, maxSelectedSlots);
-    const finalProjects = [...trimmedSelectedProjects, ...newProjects].slice(0, 3);
+    const guaranteedProjects = [...safeProjects, ...leftoverVaultProjects].slice(0, 3);
+
+    // First, honor a valid addition the main call already proposed (if any).
+    const addedProjectsRaw = Array.isArray(aiResult.added_projects) ? aiResult.added_projects.slice(0, 1) : [];
+    let newProjects = addedProjectsRaw
+      .filter((p: any) => p?.title && Array.isArray(p.bullets) && p.bullets.filter((b: string) => (b || '').length > 25).length >= 2)
+      .map((p: any, i: number) => ({
+        id: `ai-project-${i}`,
+        title: p.title,
+        tech_stack: p.tech_stack || '',
+        bullets: p.bullets,
+        is_ai_added: true,
+        justification: p.justification || 'Added by AI — not in your original vault. Only submit this if you can genuinely speak to it in an interview.',
+      }));
+
+    // If the vault simply doesn't have 3 projects and the main call didn't already fill the
+    // gap, make one small, laser-focused call asking for exactly one project. This is far
+    // more reliable than hoping a giant multi-section response remembers to do it.
+    const shortfall = 3 - guaranteedProjects.length;
+    if (shortfall > 0 && newProjects.length === 0) {
+      const filler = await generateFillerProject({
+        job,
+        vault,
+        existingProjectTitles: guaranteedProjects.map((p: any) => p.title),
+      });
+      if (filler) {
+        newProjects = [{ id: 'ai-project-0', ...filler, is_ai_added: true }];
+      }
+    }
+
+    for (const p of newProjects) {
+      finalAddedItems.push({ section: 'Projects', item: p.title, justification: p.justification });
+    }
+
+    // Final cap: 3 max, added project always preserved rather than dropped by a naive slice.
+    const maxGuaranteedSlots = Math.max(3 - newProjects.length, 0);
+    const finalProjects = [...guaranteedProjects.slice(0, maxGuaranteedSlots), ...newProjects].slice(0, 3);
 
     const tailoredCv = {
       skills: safeSkillCategories,
       projects: finalProjects,
       experience: safeExperience,
       certifications: finalCertifications,
+      extracurriculars: finalExtracurriculars,
     };
 
     // Sanity check: if your vault actually has content but the tailored CV came back
@@ -297,6 +330,78 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// A small, single-purpose call used ONLY when the vault has fewer than 3 projects and the
+// main tailoring call didn't already propose one. Asking for exactly one thing, with nothing
+// else competing for the model's attention, is much more reliable than hoping a giant
+// multi-section response remembers an optional "add a project if needed" instruction.
+async function generateFillerProject(args: {
+  job: any;
+  vault: any;
+  existingProjectTitles: string[];
+}): Promise<{ title: string; tech_stack: string; bullets: string[]; justification: string } | null> {
+  const { job, vault, existingProjectTitles } = args;
+
+  const prompt = `
+    A candidate's resume currently has only ${existingProjectTitles.length} project(s) listed
+    (${existingProjectTitles.join(', ') || 'none'}), but the target of 3 isn't met because their
+    verified project vault doesn't have enough entries. Propose exactly ONE additional project to
+    round the section out to 3.
+
+    Calibrate carefully:
+    - NOT too advanced: no distributed-systems claims, no "production-grade at scale", no invented
+      infra/team/enterprise experience — this is a final-year student, not a senior engineer.
+    - NOT too basic: no to-do apps, no copy-paste tutorial projects, no vague "learned X" filler.
+    - The right zone: a practical, specific, technically real project a motivated final-year
+      engineering student plausibly built independently or for a hackathon/course, relevant to the
+      target role below.
+    - No fabricated metrics (no invented %, latency, or user-count numbers).
+    - It must be clearly relevant to the target role and, ideally, to what the vault's existing
+      skills already suggest the candidate can plausibly have built.
+
+    Target role: ${job.role_offered || ''} at ${job.company_name || ''}
+    JD excerpt: ${(job.job_description_raw || '').slice(0, 2000)}
+    Candidate's real skill vault (for plausibility — the project should draw on skills they
+    actually have, not skills that are missing): ${JSON.stringify(vault.skills)}
+
+    Output strict JSON only, no markdown fences:
+    {"title": "string", "tech_stack": "string", "bullets": ["specific technical bullet 1", "specific technical bullet 2"], "justification": "why this fills a real gap for this specific role"}
+  `;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: MODEL,
+      max_tokens: 600,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: prompt }],
+    });
+
+    let raw = completion.choices[0].message.content || '{}';
+    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const firstBracket = raw.indexOf('{');
+    const lastBracket = raw.lastIndexOf('}');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      raw = raw.substring(firstBracket, lastBracket + 1);
+    }
+    const parsed = safeParseAiJson(raw);
+
+    if (!parsed?.title || !Array.isArray(parsed.bullets) || parsed.bullets.length < 2) {
+      console.error('Filler project call returned unusable content:', raw.slice(0, 500));
+      return null;
+    }
+
+    return {
+      title: parsed.title,
+      tech_stack: parsed.tech_stack || '',
+      bullets: parsed.bullets,
+      justification: parsed.justification || 'Added by AI to round the Projects section out to 3 — your vault only had ' + existingProjectTitles.length + '.',
+    };
+  } catch (err: any) {
+    console.error('Filler project call failed:', err.message);
+    return null; // fail soft — better to ship with fewer projects than crash the whole CV
   }
 }
 
