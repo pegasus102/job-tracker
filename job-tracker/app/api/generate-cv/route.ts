@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { jsonrepair } from 'jsonrepair';
 
 const openai = new OpenAI({
   baseURL: 'https://openrouter.ai/api/v1',
@@ -24,8 +25,9 @@ function norm(s: string) {
 }
 
 export async function POST(request: Request) {
+  let job_id: string | undefined;
   try {
-    const { job_id } = await request.json();
+    ({ job_id } = await request.json());
     if (!job_id) {
       return NextResponse.json({ success: false, error: 'job_id is required' }, { status: 400 });
     }
@@ -150,7 +152,7 @@ export async function POST(request: Request) {
       raw = raw.substring(firstBracket, lastBracket + 1);
     }
 
-    const aiResult = JSON.parse(raw);
+    const aiResult = safeParseAiJson(raw);
 
     // ---------- CODE-LEVEL GUARDRAILS (do not trust the model alone) ----------
 
@@ -288,6 +290,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, data: { tailored_cv: tailoredCv, ai_added_items: finalAddedItems } });
   } catch (error: any) {
     console.error('Generate CV error:', error.message);
+    if (job_id) {
+      await supabase.from('job_applications').update({ cv_status: 'Failed' }).eq('id', job_id).then(
+        () => {},
+        () => {} // best-effort only — don't let a status-reset failure mask the real error
+      );
+    }
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// The model sometimes returns near-valid JSON (an unescaped character inside a bullet,
+// a stray trailing comma, etc.) despite response_format: json_object — that mode isn't
+// strictly enforced by every provider on OpenRouter's free tier. Try a straight parse
+// first, then fall back to jsonrepair before giving up with a clear, retry-able error.
+function safeParseAiJson(raw: string): any {
+  try {
+    return JSON.parse(raw);
+  } catch (firstError) {
+    try {
+      return JSON.parse(jsonrepair(raw));
+    } catch (secondError) {
+      console.error('Raw AI output that failed to parse (even after repair):', raw.slice(0, 2000));
+      throw new Error(
+        'The AI returned malformed JSON (this happens occasionally with free models). Just hit Retry — it usually succeeds on the next attempt.'
+      );
+    }
   }
 }
