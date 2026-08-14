@@ -12,10 +12,11 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Highest-stakes call in the whole app -> use the stronger model.
-// Swap to 'google/gemini-2.5-flash' (or a free OpenRouter model) if you want
-// to spend closer to ₹0/month; Pro is noticeably more literal/obedient to
-// strict JSON + rules, which matters most for this specific call.
+// Highest-stakes call in the whole app. Free OpenRouter models rotate/degrade without notice
+// and are less reliable at obeying the strict caps below (e.g. "at most 3 projects, at most 1
+// addition") — that's exactly why every cap here is ALSO enforced in code below, not just in
+// the prompt. If you see the 3-project or 1-addition rule get violated, it's the model ignoring
+// instructions; the code will still clip it back down, so the output stays correct either way.
 const MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
 
 function norm(s: string) {
@@ -55,9 +56,10 @@ export async function POST(request: Request) {
 
     const systemPrompt = `
       You are an ATS resume tailoring assistant. You will be given a candidate's MASTER VAULT (their real,
-      verified skills/projects/experience/certifications/extracurriculars) and a target JOB DESCRIPTION, plus
-      optional RESEARCH INSIGHTS from real online discussions about this role's hiring process. The candidate
-      is a final-year Tier-3 college engineering student applying off-campus.
+      verified skills/projects/experience) and a target JOB DESCRIPTION, plus optional RESEARCH INSIGHTS
+      from real online discussions about this role's hiring process. The candidate is a final-year Tier-3
+      college engineering student applying off-campus. Their Certifications and Extracurriculars are handled
+      separately outside this step (all of them are always included as-is) — do not worry about that section.
 
       Your job: select the most relevant subset of the vault and rephrase bullet points with strong action
       verbs and role-relevant keywords. You are rewriting PRESENTATION, not inventing FACTS — with one
@@ -69,51 +71,49 @@ export async function POST(request: Request) {
          You may only choose from vault.experience using its exact "id" and reword its existing bullets.
          You may never create a new job, internship, or role that isn't in the vault.
 
-      2. CERTIFICATIONS — selection only, NEVER invention.
-         You may only choose exact strings already present in vault.certifications or vault.extracurriculars.
-         Do not propose certifications the candidate should "get" — that would look fabricated and is
-         easy for an interviewer to catch out. Leave this section as-is if nothing in the vault fits.
-
-      3. SKILLS — selection, plus limited, clearly-flagged additions.
+      2. SKILLS — selection, plus limited, clearly-flagged additions.
          Select relevant items from vault.skills. You may ADD up to 3 new skills not in the vault ONLY if
-         they are clearly essential for this specific role per the JD or research insights. Every addition
-         MUST appear in "ai_added_items" with a concrete justification.
+         they are clearly essential for this specific role per the JD or research insights, and would
+         meaningfully improve the candidate's shortlisting chances. Do not add skills just to look thorough
+         — only add what's actually necessary. Every addition MUST appear in "ai_added_items" with a
+         concrete justification.
 
-      4. PROJECTS — selection first; ONE new project only as a last resort.
-         First, select from vault.projects using exact "id"s and reword their existing bullets.
-         Only if NO project in the vault reasonably demonstrates a skill/technology that is clearly essential
-         for this role, you may propose AT MOST ONE new project under "added_projects". This is a narrow
-         exception, not a default — most tailoring runs should add zero projects.
+      3. PROJECTS — the final Projects section must contain EXACTLY 3 projects (or fewer only if the vault
+         genuinely has fewer than 3 projects total).
+         Step 1: Rank vault.projects by genuine relevance to this specific role, using the JD and research
+         insights (what recruiters/OA screens for this role tend to prioritize) as your judgment criteria.
+         Select up to 3 of the most relevant, using exact "id"s, and reword their bullets.
+         Step 2: Only if fewer than 3 vault projects are genuinely relevant to this role (e.g. the vault has
+         3+ projects but only 1-2 actually fit, or the vault simply has fewer than 3 projects and a gap
+         remains), you may add AT MOST ONE new project under "added_projects" to fill the gap.
+         If 3 or more vault projects are already genuinely relevant, add ZERO new projects.
 
-         If you do add one, it must pass ALL of these bars:
-         - Genuinely technically substantive and specific: a real, describable implementation approach
-           (e.g. "implemented a token-bucket rate limiter backed by Redis", "built a mini SQL query planner
-           supporting joins and basic cost-based optimization", "wrote a toy TCP-based chat server handling
-           concurrent connections with epoll"). Never generic or shallow (no to-do apps, no vague "worked
-           with X" bullets, no buzzword soup with no implementation detail).
-         - Plausible as something a motivated final-year STUDENT built independently or for a course/hackathon
-           — not something that implies years of professional experience, a team, or production/enterprise
-           deployment. It should make the candidate look capable and driven, never like a fresher falsely
-           claiming senior-level experience — that reads as suspicious to an interviewer, not impressive.
-         - No fabricated outcome metrics. Do not invent percentages, latency numbers, user counts, or revenue
-           impact. Describe what was built and how it works, not a fabricated business outcome.
-         - Must include a clear justification tied to the specific JD requirement or research insight it
-           addresses, and MUST also be logged in "ai_added_items" with section "Projects".
+         If you do add one, calibrate the complexity carefully — this is the part that most often goes wrong:
+         - NOT too advanced/showy: avoid anything that would make an interviewer suspicious a fresher
+           actually built it alone (no distributed systems claims, no "built a production-grade X serving
+           Y requests/sec", no invented infra scale).
+         - NOT too basic/filler: avoid anything so simple it wouldn't help candidacy at all (no plain to-do
+           apps, no copy-paste tutorial projects, no vague "learned X" bullets).
+         - The right zone: a practical, specific, attention-grabbing project a motivated final-year student
+           plausibly built independently or for a hackathon/course — concrete implementation detail, real
+           technical decisions, but scoped appropriately for a fresher's experience level.
+         - No fabricated outcome metrics. Do not invent percentages, latency numbers, user counts, or
+           revenue impact. Describe what was built and how, not a fabricated business outcome.
+         - MUST include a justification tied to the specific JD requirement or research insight it addresses,
+           and MUST also be logged in "ai_added_items" with section "Projects".
 
-      5. Never exaggerate scope, seniority, or impact beyond what an original bullet or added project
+      4. Never exaggerate scope, seniority, or impact beyond what an original bullet or added project
          actually supports.
 
-      6. Output strict JSON ONLY. No markdown fences, no commentary.
+      5. Output strict JSON ONLY. No markdown fences, no commentary.
 
       Required JSON shape:
       {
-        "summary": "A 1-2 sentence professional summary grounded only in vault facts, or null",
         "selected_skills": [{"category": "Languages", "items": "Python, JavaScript, C++"}],
         "selected_projects": [{"id": "must match a vault.projects id exactly", "tailored_bullets": ["First tailored bullet point goes here.", "Second tailored bullet point goes here."]}],
         "added_projects": [{"title": "Example Project Name", "tech_stack": "React, Node.js", "bullets": ["First project detail goes here.", "Second project detail goes here."], "justification": "Why this was added"}],
         "selected_experience": [{"id": "must match a vault.experience id exactly", "tailored_bullets": ["First experience bullet goes here.", "Second experience bullet goes here."]}],
-        "selected_certifications": ["exact string from vault.certifications only"],
-        "ai_added_items": [{"section": "Skills", "item": "Docker", "justification": "Required by job description"}]
+        "ai_added_items": [{"section": "Skills" | "Projects", "item": "Docker", "justification": "Required by job description"}]
       }
     `;
 
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
       model: MODEL,
       max_tokens: 3000,
       temperature: 0.1,
-      // 👇 THIS FORCES THE AI TO OUTPUT ONLY RAW VALID JSON
+      // 👇 forces the model to output only raw valid JSON
       response_format: { type: 'json_object' },
       messages: [
         { role: 'system', content: systemPrompt + ' You must output your final response as a valid JSON object.' },
@@ -138,30 +138,24 @@ export async function POST(request: Request) {
       ],
     });
 
-    // ✅ FIXED CODE
     let raw = completion.choices[0].message.content || '{}';
 
-// Strip markdown fences
+    // Strip markdown fences
     raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
 
-// Find the very first '{' and the matching last '}' to completely discard 
-// any extra conversational text or double-json the AI appends at the end.
+    // Discard any extra conversational text the model appends before/after the JSON
     const firstBracket = raw.indexOf('{');
     const lastBracket = raw.lastIndexOf('}');
-
     if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
       raw = raw.substring(firstBracket, lastBracket + 1);
     }
 
     const aiResult = JSON.parse(raw);
-    
 
     // ---------- CODE-LEVEL GUARDRAILS (do not trust the model alone) ----------
 
     // 1. Vault-matched projects: only ids that actually exist in the vault are kept.
-    //    Ids are normalized (trimmed/lowercased) before comparing — LLMs occasionally echo
-    //    an id back with stray whitespace or case changes, and we don't want that to silently
-    //    drop a genuinely valid selection.
+    //    Ids are normalized (trimmed/lowercased) before comparing.
     const projectMap = new Map(vault.projects.map((p: any) => [norm(p.id), p]));
     const experienceMap = new Map(vault.experience.map((e: any) => [norm(e.id), e]));
 
@@ -197,15 +191,12 @@ export async function POST(request: Request) {
         };
       });
 
-    // 3. Certifications: STRICT selection only. Anything not verbatim in the vault is dropped
-    //    silently (never shown, never flagged as "added" — certifications are never invented).
-    const vaultCertSet = new Set([
-      ...vault.certifications.map((c: any) => norm(c.name)),
-      ...vault.extracurriculars.map((c: any) => norm(c.title)),
-    ]);
-    const safeCertifications = (aiResult.selected_certifications || []).filter((cert: string) =>
-      vaultCertSet.has(norm(cert))
-    );
+    // 3. Certifications & Extracurriculars: NEVER passed through the AI at all — every entry
+    //    in your vault is included as-is, every time. Nothing to filter, nothing to lose.
+    const finalCertifications = [
+      ...vault.certifications.map((c: any) => (c.issuer ? `${c.name} — ${c.issuer}` : c.name)).filter(Boolean),
+      ...vault.extracurriculars.map((ex: any) => (ex.detail ? `${ex.title} — ${ex.detail}` : ex.title)).filter(Boolean),
+    ];
 
     // 4. Skills: model may add up to 3 items not in the vault; anything unmatched gets
     //    force-logged as an added item even if the model forgot to log it itself.
@@ -223,19 +214,19 @@ export async function POST(request: Request) {
       for (const item of items) {
         kept.push(item);
         if (!vaultSkillSet.has(norm(item))) {
-          const declared = declaredAdditions.get(norm(item));
+          const declared = declaredAdditions.get(norm(item)) as { justification?: string } | undefined;
           finalAddedItems.push({
             section: 'Skills',
             item,
-            justification: (declared as any)?.justification || 'Added by AI as role-critical; not in your original vault — verify before submitting.',
+            justification: declared?.justification || 'Added by AI as role-critical; not in your original vault — verify before submitting.',
           });
         }
       }
       return { category: cat.category, items: kept.join(', ') };
     });
 
-    // 5. New projects: allow AT MOST ONE, and require actual substance (proxy check —
-    //    the prompt carries the real quality bar, this just blocks empty/lazy output).
+    // 5. New projects: allow AT MOST ONE, and require actual substance (proxy check — the
+    //    prompt carries the real quality/complexity bar, this just blocks empty/lazy output).
     const addedProjectsRaw = Array.isArray(aiResult.added_projects) ? aiResult.added_projects.slice(0, 1) : [];
     const newProjects = addedProjectsRaw
       .filter((p: any) => p?.title && Array.isArray(p.bullets) && p.bullets.filter((b: string) => (b || '').length > 25).length >= 2)
@@ -254,25 +245,24 @@ export async function POST(request: Request) {
         };
       });
 
+    // 6. Hard cap: final Projects section is exactly 3 max, with the added project (if any)
+    //    always preserved rather than accidentally dropped by a naive slice.
+    const maxSelectedSlots = Math.max(3 - newProjects.length, 0);
+    const trimmedSelectedProjects = safeProjects.slice(0, maxSelectedSlots);
+    const finalProjects = [...trimmedSelectedProjects, ...newProjects].slice(0, 3);
+
     const tailoredCv = {
-      summary: aiResult.summary || null,
       skills: safeSkillCategories,
-      projects: [...safeProjects, ...newProjects],
+      projects: finalProjects,
       experience: safeExperience,
-      certifications: safeCertifications,
+      certifications: finalCertifications,
     };
 
     // Sanity check: if your vault actually has content but the tailored CV came back
-    // completely empty, something went wrong (empty vault at generation time, id
-    // mismatch, or malformed model output). Fail loudly instead of silently saving
-    // an empty "Generated" CV that looks successful in the UI but downloads blank.
-    const vaultHasContent =
-      vault.skills.length > 0 || vault.projects.length > 0 ||
-      vault.experience.length > 0 || vault.certifications.length > 0 ||
-      vault.extracurriculars.length > 0;
-    const cvHasContent =
-      tailoredCv.skills.length > 0 || tailoredCv.projects.length > 0 ||
-      tailoredCv.experience.length > 0 || tailoredCv.certifications.length > 0;
+    // completely empty on the AI-driven sections, something went wrong. Fail loudly instead
+    // of silently saving an empty "Generated" CV that looks successful but downloads blank.
+    const vaultHasContent = vault.skills.length > 0 || vault.projects.length > 0 || vault.experience.length > 0;
+    const cvHasContent = tailoredCv.skills.length > 0 || tailoredCv.projects.length > 0 || tailoredCv.experience.length > 0;
 
     if (vaultHasContent && !cvHasContent) {
       await supabase.from('job_applications').update({ cv_status: 'Failed' }).eq('id', job_id);
