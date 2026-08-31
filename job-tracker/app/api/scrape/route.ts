@@ -88,8 +88,27 @@ export async function POST(request: Request) {
       ]
     });
 
+    // 👇 NEW SAFETY CHECK 👇
+    if (!completion || !completion.choices || completion.choices.length === 0) {
+      console.error("OpenRouter API Error:", JSON.stringify(completion, null, 2));
+      throw new Error(
+        (completion as any)?.error?.message || "The AI provider failed to return a response. It might be overloaded or you hit a limit."
+      );
+    }
+    // 👆 END OF SAFETY CHECK 👆
+
     let aiResponse = completion.choices[0].message.content || '';
-    aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // 👇 SMARTER JSON EXTRACTION 👇
+    const firstBracket = aiResponse.indexOf('{');
+    const lastBracket = aiResponse.lastIndexOf('}');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      aiResponse = aiResponse.substring(firstBracket, lastBracket + 1);
+    } else {
+      aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+    }
+    // 👆 END OF SMARTER JSON EXTRACTION 👆
+
     const jobData = JSON.parse(aiResponse);
 
     // Hardcode reliable fields
