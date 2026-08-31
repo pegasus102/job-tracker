@@ -5,6 +5,7 @@ import { differenceInDays, parseISO } from 'date-fns';
 import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon, SparklesIcon, UserCircleIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
 import MasterProfileModal from '../components/MasterProfileModal';
 import AuditDrawer from '../components/AuditDrawer';
+import JobDeadlineEditor from '../components/JobDeadlineEditor';
 
 // 1. Database Interface
 interface Job {
@@ -396,6 +397,15 @@ export default function Dashboard() {
                             {alertProps.text}
                         </div>
                         {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
+                        
+                        {/* THE NEW TOGGLE IS SAFELY PLACED HERE */}
+                        <div className="mt-2">
+                          <JobDeadlineEditor 
+                            jobId={job.id} 
+                            initialDeadline={job.deadline} 
+                            onUpdate={() => fetchJobs()} 
+                          />
+                        </div>
                     </td>
 
                     <td className="p-4 sm:p-5 align-top">
