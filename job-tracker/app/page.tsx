@@ -185,8 +185,8 @@ export default function Dashboard() {
 
     if (daysLeft < 0) return {
       text: 'Expired',
-      badgeClass: 'bg-slate-200 text-slate-700',
-      rowClass: 'bg-slate-50 text-slate-500 border-slate-200'
+      badgeClass: 'bg-red-100 text-red-800 border border-red-200',
+      rowClass: 'bg-red-50/60 text-slate-500 border-red-100'
     };
     if (daysLeft <= 2) return {
       text: `${daysLeft === 0 ? 'Today' : `${daysLeft} days left`}`,
