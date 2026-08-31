@@ -396,8 +396,7 @@ export default function Dashboard() {
                             <ClockIcon className="w-4 h-4" />
                             {alertProps.text}
                         </div>
-                        {job.deadline && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
-                        
+                        {job.deadline && job.deadline !== '1999-12-31' && <p className="text-xs text-slate-500 mt-2 font-mono">End: {job.deadline}</p>}
                         {/* THE NEW TOGGLE IS SAFELY PLACED HERE */}
                         <div className="mt-2">
                           <JobDeadlineEditor 
