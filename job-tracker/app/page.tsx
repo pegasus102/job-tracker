@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { differenceInDays, parseISO } from 'date-fns';
-import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, BoltIcon, CalendarDaysIcon, CheckCircleIcon, TrashIcon, SparklesIcon, UserCircleIcon, ArrowPathIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, LinkIcon, MapPinIcon, BriefcaseIcon, ClockIcon, ExclamationTriangleIcon, AcademicCapIcon, CheckCircleIcon, TrashIcon, SparklesIcon, UserCircleIcon, ArrowPathIcon, BookmarkIcon as SolidBookmarkIcon } from '@heroicons/react/24/solid';
+import { BookmarkIcon as OutlineBookmarkIcon } from '@heroicons/react/24/outline';
 import MasterProfileModal from '../components/MasterProfileModal';
 import AuditDrawer from '../components/AuditDrawer';
 import JobDeadlineEditor from '../components/JobDeadlineEditor';
@@ -20,6 +21,7 @@ interface Job {
   status: 'Wishlist' | 'Applied' | 'Assessment' | 'Interview' | 'Rejected' | 'Expired';
   created_at: string;
   date_found: string | null;
+  is_bookmarked?: boolean;
   // --- CV tailoring fields ---
   cv_status?: 'Not Generated' | 'Researching' | 'Generating' | 'Generated' | 'Failed';
   research_insights?: any;
@@ -139,6 +141,23 @@ export default function Dashboard() {
     }
   };
 
+  const toggleBookmarkStatus = async (id: string, currentStatus: boolean) => {
+    const newStatus = !currentStatus;
+
+    setJobs(currentJobs => currentJobs.map(job =>
+      job.id === id ? { ...job, is_bookmarked: newStatus } : job
+    ));
+
+    const { error } = await supabase
+      .from('job_applications')
+      .update({ is_bookmarked: newStatus })
+      .eq('id', id);
+
+    if (error) {
+      fetchJobs();
+    }
+  };
+
   // --- CV tailoring flow: research the role, then generate the tailored CV ---
   const handleTailorCV = async (job: Job) => {
     setTailoringId(job.id);
@@ -178,30 +197,38 @@ export default function Dashboard() {
     return days < 0 ? 0 : days;
   };
 
-  const getDeadlineAlertProps = (deadlineDate: string | null) => {
-    if (!deadlineDate) return { text: 'N/D', badgeClass: 'bg-zinc-100 text-zinc-700', rowClass: 'bg-white' };
+  const getDeadlineAlertProps = (deadlineDate: string | null, status: Job['status']) => {
+    const isExpired = deadlineDate === '1999-12-31' ||
+      (deadlineDate !== null && differenceInDays(parseISO(deadlineDate), new Date()) < 0);
+    const rowClass = status === 'Applied'
+      ? 'bg-emerald-50 text-slate-900 border-emerald-200'
+      : isExpired
+        ? 'bg-red-50/60 text-slate-500 border-red-100'
+        : 'bg-white';
+
+    if (!deadlineDate) return { text: 'N/D', badgeClass: 'bg-zinc-100 text-zinc-700', rowClass };
 
     const daysLeft = differenceInDays(parseISO(deadlineDate), new Date());
 
     if (daysLeft < 0) return {
       text: 'Expired',
       badgeClass: 'bg-red-100 text-red-800 border border-red-200',
-      rowClass: 'bg-red-50/60 text-slate-500 border-red-100'
+      rowClass
     };
     if (daysLeft <= 2) return {
       text: `${daysLeft === 0 ? 'Today' : `${daysLeft} days left`}`,
       badgeClass: 'bg-red-100 text-red-800 border border-red-200',
-      rowClass: 'bg-red-50'
+      rowClass
     };
     if (daysLeft <= 7) return {
       text: `${daysLeft} days left`,
       badgeClass: 'bg-amber-100 text-amber-900 border border-amber-200',
-      rowClass: 'bg-amber-50'
+      rowClass
     };
     return {
       text: `${daysLeft} days left`,
       badgeClass: 'bg-emerald-100 text-emerald-900 border border-emerald-200',
-      rowClass: 'bg-emerald-50'
+      rowClass
     };
   };
 
@@ -235,11 +262,10 @@ export default function Dashboard() {
       </div>
 
       {/* --- QUICK STATS --- */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-8">
         {[
             {label: 'Applied Total', value: statCount('Applied'), icon: BriefcaseIcon, color: 'text-indigo-600'},
-            {label: 'Assessment Pending', value: statCount('Assessment'), icon: BoltIcon, color: 'text-amber-600'},
-            {label: 'Active Interviews', value: statCount('Interview'), icon: CalendarDaysIcon, color: 'text-sky-600'},
+            {label: 'Bookmarked', value: jobs.filter(j => j.is_bookmarked).length, icon: SolidBookmarkIcon, color: 'text-amber-600'},
             {label: 'Deadlines Over', value: statCount('Expired') + jobs.filter(j => j.deadline && differenceInDays(parseISO(j.deadline), new Date()) < 0).length, icon: ExclamationTriangleIcon, color: 'text-red-600'}
         ].map(stat => (
             <div key={stat.label} className="bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-200 flex items-start gap-3 sm:gap-4">
@@ -341,7 +367,7 @@ export default function Dashboard() {
                     </td>
                 </tr>
               ) : jobs.map((job) => {
-                const alertProps = getDeadlineAlertProps(job.deadline);
+                const alertProps = getDeadlineAlertProps(job.deadline, job.status);
                 const targetDate = job.date_found || job.created_at;
                 const daysPassed = getDaysPassed(targetDate);
                 const isTailoring = tailoringId === job.id;
@@ -363,7 +389,22 @@ export default function Dashboard() {
                     </td>
 
                     <td className="p-4 sm:p-5 align-top">
-                        <p className="font-bold text-base sm:text-lg text-slate-950 leading-tight">{job.company_name}</p>
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="font-bold text-base sm:text-lg text-slate-950 leading-tight">{job.company_name}</p>
+                          <button
+                            type="button"
+                            onClick={() => toggleBookmarkStatus(job.id, !!job.is_bookmarked)}
+                            className="p-1 text-amber-500 hover:bg-amber-50 rounded-full transition-colors"
+                            aria-label={job.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'}
+                            title={job.is_bookmarked ? 'Remove bookmark' : 'Add bookmark'}
+                          >
+                            {job.is_bookmarked ? (
+                              <SolidBookmarkIcon className="w-5 h-5" />
+                            ) : (
+                              <OutlineBookmarkIcon className="w-5 h-5" />
+                            )}
+                          </button>
+                        </div>
                         <p className="text-slate-700 flex items-center gap-1.5 mt-1 text-xs sm:text-sm">
                             <BriefcaseIcon className="w-4 h-4 text-indigo-400 flex-shrink-0" />
                             {job.role_offered}
