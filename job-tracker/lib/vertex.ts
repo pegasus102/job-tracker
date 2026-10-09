@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import type { Tool } from "@google/genai";
+import type { ThinkingConfig, Tool } from "@google/genai";
 
 const project = process.env.GOOGLE_CLOUD_PROJECT;
 const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
@@ -38,6 +38,7 @@ type LegacyRequest = {
     maxOutputTokens?: number;
     temperature?: number;
     responseMimeType?: string;
+    thinkingConfig?: ThinkingConfig;
   };
   tools?: Tool[];
 };
@@ -58,11 +59,12 @@ function createModel(model: string) {
 
       const response = await vertexAI.models.generateContent({
         model,
-        contents: contents as never,
+        contents: normalizeContents(contents),
         config: {
           maxOutputTokens: generationConfig?.maxOutputTokens,
           temperature: generationConfig?.temperature,
           responseMimeType: generationConfig?.responseMimeType,
+          thinkingConfig: generationConfig?.thinkingConfig,
           tools,
         },
       });
@@ -72,15 +74,33 @@ function createModel(model: string) {
           text: () => response.text ?? "",
           candidates: response.candidates,
           promptFeedback: response.promptFeedback,
+          responseId: response.responseId,
           usageMetadata: response.usageMetadata,
         },
         text: response.text,
         candidates: response.candidates,
         promptFeedback: response.promptFeedback,
+        responseId: response.responseId,
         usageMetadata: response.usageMetadata,
       };
     },
   };
+}
+
+function normalizeContents(
+  contents: string | LegacyRequest['contents']
+): string | LegacyRequest['contents'] {
+  if (typeof contents === 'string') return contents;
+
+  if (
+    contents.length === 1 &&
+    contents[0].role === 'user' &&
+    contents[0].parts.every((part) => typeof part.text === 'string')
+  ) {
+    return contents[0].parts.map((part) => part.text).join('\n');
+  }
+
+  return contents;
 }
 
 export const geminiFlash = createModel("gemini-3.8-flash");
