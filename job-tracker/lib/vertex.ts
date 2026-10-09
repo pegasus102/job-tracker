@@ -1,61 +1,75 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// ─── Environment configuration ──────────────────────────────
-
 const project = process.env.GOOGLE_CLOUD_PROJECT;
 
 if (!project) {
-  throw new Error(
-    "Missing GOOGLE_CLOUD_PROJECT environment variable."
-  );
+  throw new Error("Missing GOOGLE_CLOUD_PROJECT");
 }
-
-// Use Google's global Vertex AI endpoint.
-// Do not set this to "us".
-const location = "global";
-
-// ─── Vertex AI client ───────────────────────────────────────
 
 const vertexAI = new GoogleGenAI({
   vertexai: true,
   project,
-  location,
+  location: "global",
   apiVersion: "v1",
 });
 
-// ─── Model configuration ────────────────────────────────────
-
-export const geminiFlash = {
-  model: "gemini-3.8-flash",
-
-  async generateContent(prompt: string) {
-    return vertexAI.models.generateContent({
-      model: this.model,
-      contents: prompt,
-    });
-  },
+type LegacyRequest = {
+  contents: Array<{
+    role: string;
+    parts: Array<{ text: string }>;
+  }>;
+  generationConfig?: {
+    maxOutputTokens?: number;
+    temperature?: number;
+    responseMimeType?: string;
+  };
+  tools?: unknown[];
 };
 
-export const geminiPro = {
-  model: "gemini-3.1-pro-preview",
+function createModel(model: string) {
+  return {
+    async generateContent(request: LegacyRequest | string) {
+      const contents =
+        typeof request === "string"
+          ? request
+          : request.contents;
 
-  async generateContent(prompt: string) {
-    return vertexAI.models.generateContent({
-      model: this.model,
-      contents: prompt,
-    });
-  },
-};
+      const oldConfig =
+        typeof request === "string"
+          ? undefined
+          : request.generationConfig;
 
-// ─── Connection test ────────────────────────────────────────
+      const tools =
+        typeof request === "string"
+          ? undefined
+          : request.tools;
 
-export async function testVertexAI() {
-  const response = await geminiPro.generateContent(
-    "Reply with exactly: VERTEX_OK"
-  );
+      const response = await vertexAI.models.generateContent({
+        model,
+        contents: contents as never,
+        config: {
+          maxOutputTokens: oldConfig?.maxOutputTokens,
+          temperature: oldConfig?.temperature,
+          responseMimeType: oldConfig?.responseMimeType,
+          tools: tools as never,
+        },
+      });
 
-  console.log("Vertex AI response:", response.text);
-
-  return response.text;
+      // Compatibility adapter for routes expecting result.response.text()
+      return {
+        response: {
+          text: () => response.text ?? "",
+          candidates: response.candidates,
+          usageMetadata: response.usageMetadata,
+        },
+        text: response.text,
+        candidates: response.candidates,
+        usageMetadata: response.usageMetadata,
+      };
+    },
+  };
 }
+
+export const geminiFlash = createModel("gemini-3.8-flash");
+export const geminiPro = createModel("gemini-3.1-pro-preview");
