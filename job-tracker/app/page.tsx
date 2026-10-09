@@ -197,14 +197,20 @@ export default function Dashboard() {
     return days < 0 ? 0 : days;
   };
 
-  const getDeadlineAlertProps = (deadlineDate: string | null, status: Job['status']) => {
+  const getDeadlineAlertProps = (
+    deadlineDate: string | null,
+    status: Job['status'],
+    isBookmarked: boolean
+  ) => {
     const isExpired = deadlineDate === '1999-12-31' ||
       (deadlineDate !== null && differenceInDays(parseISO(deadlineDate), new Date()) < 0);
     const rowClass = status === 'Applied'
       ? 'bg-emerald-50 text-slate-900 border-emerald-200'
       : isExpired
         ? 'bg-red-50/60 text-slate-500 border-red-100'
-        : 'bg-white';
+        : isBookmarked
+          ? 'bg-amber-50 text-slate-900 border-amber-200'
+          : 'bg-white';
 
     if (!deadlineDate) return { text: 'N/D', badgeClass: 'bg-zinc-100 text-zinc-700', rowClass };
 
@@ -367,7 +373,7 @@ export default function Dashboard() {
                     </td>
                 </tr>
               ) : jobs.map((job) => {
-                const alertProps = getDeadlineAlertProps(job.deadline, job.status);
+                const alertProps = getDeadlineAlertProps(job.deadline, job.status, !!job.is_bookmarked);
                 const targetDate = job.date_found || job.created_at;
                 const daysPassed = getDaysPassed(targetDate);
                 const isTailoring = tailoringId === job.id;

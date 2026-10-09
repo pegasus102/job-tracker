@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { jsonrepair } from 'jsonrepair';
-
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { geminiPro } from '@/lib/vertex';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,8 +13,6 @@ const supabase = createClient(
 // addition") — that's exactly why every cap here is ALSO enforced in code below, not just in
 // the prompt. If you see the 3-project or 1-addition rule get violated, it's the model ignoring
 // instructions; the code will still clip it back down, so the output stays correct either way.
-const MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
-
 function norm(s: string) {
   return (s || '').toLowerCase().trim();
 }
@@ -128,29 +121,22 @@ export async function POST(request: Request) {
       master_vault: vault,
     };
 
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      max_tokens: 3000,
-      temperature: 0.1,
-      // 👇 forces the model to output only raw valid JSON
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: systemPrompt + ' You must output your final response as a valid JSON object.' },
-        { role: 'user', content: JSON.stringify(userPayload) },
+    const response = await geminiPro.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: `${systemPrompt}\n\n${JSON.stringify(userPayload)}` }],
+        },
       ],
+      generationConfig: {
+        maxOutputTokens: 3000,
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+      },
     });
 
-    let raw = completion.choices[0].message.content || '{}';
-
-    // Strip markdown fences
-    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-
-    // Discard any extra conversational text the model appends before/after the JSON
-    const firstBracket = raw.indexOf('{');
-    const lastBracket = raw.lastIndexOf('}');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      raw = raw.substring(firstBracket, lastBracket + 1);
-    }
+    const raw = response.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) throw new Error('Vertex AI returned no CV tailoring response');
 
     const aiResult = safeParseAiJson(raw);
 
@@ -212,12 +198,14 @@ export async function POST(request: Request) {
     );
 
     const finalAddedItems: any[] = [];
+    let addedSkillCount = 0;
     const safeSkillCategories = (aiResult.selected_skills || []).map((cat: any) => {
       const items: string[] = (cat.items || '').split(',').map((x: string) => x.trim()).filter(Boolean);
       const kept: string[] = [];
       for (const item of items) {
-        kept.push(item);
         if (!vaultSkillSet.has(norm(item))) {
+          if (addedSkillCount >= 3) continue;
+          addedSkillCount += 1;
           const declared = declaredAdditions.get(norm(item)) as { justification?: string } | undefined;
           finalAddedItems.push({
             section: 'Skills',
@@ -225,6 +213,7 @@ export async function POST(request: Request) {
             justification: declared?.justification || 'Added by AI as role-critical; not in your original vault — verify before submitting.',
           });
         }
+        kept.push(item);
       }
       return { category: cat.category, items: kept.join(', ') };
     });
@@ -284,6 +273,10 @@ export async function POST(request: Request) {
     // Final cap: 3 max, added project always preserved rather than dropped by a naive slice.
     const maxGuaranteedSlots = Math.max(3 - newProjects.length, 0);
     const finalProjects = [...guaranteedProjects.slice(0, maxGuaranteedSlots), ...newProjects].slice(0, 3);
+
+    if (finalProjects.length !== 3 || addedSkillCount > 3) {
+      throw new Error('Vertex AI output failed validation: the tailored CV must contain exactly 3 projects and at most 3 added skills.');
+    }
 
     const tailoredCv = {
       skills: safeSkillCategories,
@@ -371,21 +364,17 @@ async function generateFillerProject(args: {
   `;
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      max_tokens: 600,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: prompt }],
+    const response = await geminiPro.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 600,
+        temperature: 0.2,
+        responseMimeType: 'application/json',
+      },
     });
 
-    let raw = completion.choices[0].message.content || '{}';
-    raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-    const firstBracket = raw.indexOf('{');
-    const lastBracket = raw.lastIndexOf('}');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      raw = raw.substring(firstBracket, lastBracket + 1);
-    }
+    const raw = response.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!raw) throw new Error('Vertex AI returned no filler project response');
     const parsed = safeParseAiJson(raw);
 
     if (!parsed?.title || !Array.isArray(parsed.bullets) || parsed.bullets.length < 2) {

@@ -1,12 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
-import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
-
-const openai = new OpenAI({
-  baseURL: 'https://openrouter.ai/api/v1',
-  apiKey: process.env.OPENROUTER_API_KEY,
-});
+import { geminiFlash } from '@/lib/vertex';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,13 +12,13 @@ export async function POST(request: Request) {
   try {
     const { url } = await request.json();
 
-    const response = await fetch(url, {
+    const pageResponse = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9'
       }
     });
-    const html = await response.text();
+    const html = await pageResponse.text();
 
     const $ = cheerio.load(html);
 
@@ -78,36 +73,24 @@ export async function POST(request: Request) {
       }
     `;
 
-    const completion = await openai.chat.completions.create({
-      model: 'nvidia/nemotron-3-super-120b-a12b:free',
-      max_tokens: 1500,
-      temperature: 0.1,
-      messages: [
-        { role: 'system', content: prompt },
-        { role: 'user', content: finalContentForAi }
-      ]
+    const vertexResponse = await geminiFlash.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: `${prompt}\n\n${finalContentForAi}` }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 1500,
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+      },
     });
 
-    // 👇 NEW SAFETY CHECK 👇
-    if (!completion || !completion.choices || completion.choices.length === 0) {
-      console.error("OpenRouter API Error:", JSON.stringify(completion, null, 2));
-      throw new Error(
-        (completion as any)?.error?.message || "The AI provider failed to return a response. It might be overloaded or you hit a limit."
-      );
+    const aiResponse = vertexResponse.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!aiResponse) {
+      throw new Error('Vertex AI returned no job extraction response');
     }
-    // 👆 END OF SAFETY CHECK 👆
-
-    let aiResponse = completion.choices[0].message.content || '';
-    
-    // 👇 SMARTER JSON EXTRACTION 👇
-    const firstBracket = aiResponse.indexOf('{');
-    const lastBracket = aiResponse.lastIndexOf('}');
-    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-      aiResponse = aiResponse.substring(firstBracket, lastBracket + 1);
-    } else {
-      aiResponse = aiResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-    }
-    // 👆 END OF SMARTER JSON EXTRACTION 👆
 
     const jobData = JSON.parse(aiResponse);
 
