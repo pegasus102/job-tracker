@@ -87,7 +87,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const aiResponse = vertexResponse.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    const aiResponse = vertexResponse.text?.trim();
     if (!aiResponse) {
       throw new Error('Vertex AI returned no job extraction response');
     }

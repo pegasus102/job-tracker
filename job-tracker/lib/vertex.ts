@@ -1,5 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
+import type { Tool } from "@google/genai";
 
 const project = process.env.GOOGLE_CLOUD_PROJECT;
 const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
@@ -38,7 +39,7 @@ type LegacyRequest = {
     temperature?: number;
     responseMimeType?: string;
   };
-  tools?: unknown[];
+  tools?: Tool[];
 };
 
 function createModel(model: string) {
@@ -62,7 +63,7 @@ function createModel(model: string) {
           maxOutputTokens: generationConfig?.maxOutputTokens,
           temperature: generationConfig?.temperature,
           responseMimeType: generationConfig?.responseMimeType,
-          tools: tools as never,
+          tools,
         },
       });
 
@@ -70,10 +71,12 @@ function createModel(model: string) {
         response: {
           text: () => response.text ?? "",
           candidates: response.candidates,
+          promptFeedback: response.promptFeedback,
           usageMetadata: response.usageMetadata,
         },
         text: response.text,
         candidates: response.candidates,
+        promptFeedback: response.promptFeedback,
         usageMetadata: response.usageMetadata,
       };
     },

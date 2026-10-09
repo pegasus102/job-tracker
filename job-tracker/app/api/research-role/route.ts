@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { geminiFlash } from '@/lib/vertex';
-import type { Tool } from '@google-cloud/vertexai';
+import type { Tool } from '@google/genai';
+
+type ResearchInsights = {
+  confirmed_requirements: string[];
+  recurring_skills: string[];
+  stack_signals: string[];
+  interview_signals: string[];
+  emphasis: string;
+};
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,13 +59,22 @@ export async function POST(request: Request) {
         temperature: 0.1,
         responseMimeType: 'application/json',
       },
-      // The SDK's current type declarations predate the REST `googleSearch` tool name.
-      tools: [{ googleSearch: {} } as unknown as Tool],
+      tools: [{ googleSearch: {} } satisfies Tool],
     });
 
-    const raw = response.response.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) throw new Error('Vertex AI returned no research response');
-    const insights = JSON.parse(raw);
+    const raw = response.text?.trim();
+    if (!raw) {
+      const blockReason = response.promptFeedback?.blockReason;
+      const finishReason = response.candidates?.[0]?.finishReason;
+      const detail = blockReason
+        ? `prompt blocked (${blockReason})`
+        : finishReason
+          ? `generation finished without text (${finishReason})`
+          : 'the model returned no candidates or text';
+      throw new Error(`Vertex AI returned no research text: ${detail}. Retry the research step.`);
+    }
+
+    const insights = parseResearchInsights(raw);
 
     await supabase
       .from('job_applications')
@@ -69,7 +86,42 @@ export async function POST(request: Request) {
     if (job_id) {
       await supabase.from('job_applications').update({ cv_status: 'Failed' }).eq('id', job_id);
     }
+
     console.error('Research error:', error.message);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+function parseResearchInsights(raw: string): ResearchInsights {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Vertex AI returned research that was not valid JSON. Retry the research step.');
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    throw new Error('Vertex AI returned an invalid research object. Retry the research step.');
+  }
+
+  const value = parsed as Record<string, unknown>;
+  const stringArray = (field: keyof ResearchInsights): string[] => {
+    const candidate = value[field];
+    if (!Array.isArray(candidate) || !candidate.every((item) => typeof item === 'string')) {
+      throw new Error(`Vertex AI returned an invalid research field: ${field}. Retry the research step.`);
+    }
+    return candidate;
+  };
+
+  return {
+    confirmed_requirements: stringArray('confirmed_requirements'),
+    recurring_skills: stringArray('recurring_skills'),
+    stack_signals: stringArray('stack_signals'),
+    interview_signals: stringArray('interview_signals'),
+    emphasis: typeof value.emphasis === 'string'
+      ? value.emphasis
+      : (() => {
+          throw new Error('Vertex AI returned an invalid research emphasis. Retry the research step.');
+        })(),
+  };
 }

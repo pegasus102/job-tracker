@@ -33,6 +33,9 @@ export async function POST(request: Request) {
     ]);
     if (jobError || !job) throw jobError || new Error('Job not found');
     if (profileError || !profile) throw profileError || new Error('Master profile not set up yet');
+    if (!job.research_insights) {
+      throw new Error('Research insights are unavailable. Retry the research step before tailoring the CV.');
+    }
 
     const vault = {
       skills: profile.master_skills || [],
@@ -135,7 +138,7 @@ export async function POST(request: Request) {
       },
     });
 
-    const raw = response.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    const raw = response.text?.trim();
     if (!raw) throw new Error('Vertex AI returned no CV tailoring response');
 
     const aiResult = safeParseAiJson(raw);
@@ -373,7 +376,7 @@ async function generateFillerProject(args: {
       },
     });
 
-    const raw = response.response.candidates?.[0]?.content?.parts?.[0]?.text;
+    const raw = response.text?.trim();
     if (!raw) throw new Error('Vertex AI returned no filler project response');
     const parsed = safeParseAiJson(raw);
 
