@@ -1,0 +1,8 @@
+[
+  { "text": "Built a TypeScript order API with PostgreSQL indexes, reducing p95 query latency to 180 ms." },
+  { "text": "Trained a Python forecasting model on 8k records and improved mean absolute error by 18%." },
+  { "text": "Implemented MQTT retry buffering in C for 24 sensors, reducing packet loss from 8% to 1.5%." },
+  { "text": "Created React alert tables with REST pagination for 14 categories, cutting review time to 90 minutes." },
+  { "text": "Automated STM32 calibration with Python across 400 samples, reducing fixture setup to 12 minutes." },
+  { "text": "Packaged a Go gRPC edge service with Docker and SQLite migrations for offline deployments." }
+]

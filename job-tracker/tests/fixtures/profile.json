@@ -1,0 +1,38 @@
+{
+  "fixed_details": {
+    "full_name": "Riley Example",
+    "education": [{ "degree": "B.Tech", "institution": "Example Institute" }]
+  },
+  "master_projects": [
+    {
+      "id": "project-embedded",
+      "title": "Sensor Gateway",
+      "tech_stack": "C, FreeRTOS, MQTT",
+      "bullets": ["Built a telemetry gateway with C and MQTT for 12 sensors"]
+    },
+    {
+      "id": "project-software",
+      "title": "Placement Hub",
+      "tech_stack": "TypeScript, Next.js, PostgreSQL",
+      "bullets": ["Built a job tracker with TypeScript and PostgreSQL"]
+    },
+    {
+      "id": "project-data",
+      "title": "Demand Forecast",
+      "tech_stack": "Python, pandas, scikit-learn",
+      "bullets": ["Trained a Python forecasting model on 8k records"]
+    }
+  ],
+  "master_experience": [
+    {
+      "id": "experience-1",
+      "role": "Student Developer",
+      "company": "Example Lab",
+      "duration": "2024",
+      "bullets": ["Automated test reports with Python"]
+    }
+  ],
+  "master_skills": [{ "category": "Languages", "items": "C, Python, TypeScript" }],
+  "master_certifications": [],
+  "master_extracurriculars": []
+}

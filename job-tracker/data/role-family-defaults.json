@@ -1,0 +1,7 @@
+{
+  "software": ["software development"],
+  "embedded": ["embedded systems"],
+  "data_analytics": ["data analysis"],
+  "consulting": ["business analysis"],
+  "other": ["structured analysis"]
+}

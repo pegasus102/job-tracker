@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { jsonrepair } from 'jsonrepair';

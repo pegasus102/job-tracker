@@ -1,0 +1,103 @@
+{
+  "fixed_details": {
+    "full_name": "Jordan Invented",
+    "education": [{ "degree": "B.Eng.", "institution": "Example University" }]
+  },
+  "master_projects": [
+    {
+      "id": "project-telemetry-gateway",
+      "title": "Telemetry Gateway",
+      "tech_stack": "C, FreeRTOS, MQTT",
+      "bullets": [
+        "Built a FreeRTOS gateway in C that collected readings from 24 sensors over SPI.",
+        "Designed MQTT retries and offline buffering for intermittent field connectivity.",
+        "Reduced telemetry packet loss from 8% to 1.5% during a 72-hour field test."
+      ]
+    },
+    {
+      "id": "project-vibration-rig",
+      "title": "Vibration Test Rig",
+      "tech_stack": "C++, STM32, CAN, Python",
+      "bullets": [
+        "Built an STM32 vibration controller in C++ with CAN commands for six motor channels.",
+        "Added Python calibration scripts that generated repeatable test reports from 400 samples.",
+        "Cut fixture setup time from 45 minutes to 12 minutes by automating calibration."
+      ]
+    },
+    {
+      "id": "project-api-platform",
+      "title": "Order API Platform",
+      "tech_stack": "TypeScript, Node.js, PostgreSQL, Redis",
+      "bullets": [
+        "Built a TypeScript Node.js API for order creation, inventory checks, and audit history.",
+        "Designed PostgreSQL indexes and Redis caching for the highest-volume order queries.",
+        "Handled 180 requests per second in a load test with p95 latency below 180 ms."
+      ]
+    },
+    {
+      "id": "project-react-ops",
+      "title": "Operations Dashboard",
+      "tech_stack": "React, TypeScript, REST",
+      "bullets": [
+        "Built a React and TypeScript dashboard showing live equipment alerts from a REST API.",
+        "Added filter state, accessible tables, and drill-down views for 14 alert categories.",
+        "Reduced weekly spreadsheet review time from 6 hours to 90 minutes."
+      ]
+    },
+    {
+      "id": "project-react-support",
+      "title": "Support Dashboard",
+      "tech_stack": "React, TypeScript, REST",
+      "bullets": [
+        "Built a React and TypeScript support dashboard for ticket queues and SLA status.",
+        "Implemented REST pagination and saved filters for three support teams.",
+        "Improved first-response tracking by replacing a manual CSV workflow."
+      ]
+    },
+    {
+      "id": "project-forecasting",
+      "title": "Demand Forecasting",
+      "tech_stack": "Python, pandas, scikit-learn",
+      "bullets": [
+        "Trained a scikit-learn demand model in Python from 8,000 historical order records.",
+        "Used pandas feature windows and a time-based validation split to compare three regressors.",
+        "Improved mean absolute error by 18% against the seasonal-naive baseline."
+      ]
+    },
+    {
+      "id": "project-vision",
+      "title": "Inspection Classifier",
+      "tech_stack": "Python, PyTorch, OpenCV",
+      "bullets": [
+        "Built a PyTorch image classifier in Python for 12,000 labeled inspection images.",
+        "Used OpenCV preprocessing and augmentation to normalize lighting across four cameras.",
+        "Reached 91% validation accuracy and reduced manual inspection samples by 30%."
+      ]
+    },
+    {
+      "id": "project-edge-service",
+      "title": "Edge Device Service",
+      "tech_stack": "Go, Docker, gRPC, SQLite",
+      "bullets": [
+        "Built a Go gRPC service that synchronized device configuration with an edge database.",
+        "Packaged the service with Docker and added SQLite migrations for offline deployments.",
+        "Recovered configuration after simulated network outages in under 20 seconds."
+      ]
+    }
+  ],
+  "master_experience": [
+    {
+      "id": "experience-large-1",
+      "role": "Engineering Intern",
+      "company": "Invented Lab",
+      "duration": "2023",
+      "bullets": ["Automated Python test reports for embedded fixtures."]
+    }
+  ],
+  "master_skills": [
+    { "category": "Languages", "items": "C, C++, Python, TypeScript, Go" },
+    { "category": "Platforms", "items": "Linux, Docker" }
+  ],
+  "master_certifications": [],
+  "master_extracurriculars": []
+}

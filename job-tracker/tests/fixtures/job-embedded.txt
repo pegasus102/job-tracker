@@ -1,0 +1,1 @@
+Embedded software engineer role requiring C, RTOS, firmware debugging, and MQTT device communication.

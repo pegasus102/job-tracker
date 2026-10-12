@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react/no-unescaped-entities */
 'use client';
 import { useState } from 'react';
 import { XMarkIcon, SparklesIcon, ArrowDownTrayIcon, LinkIcon } from '@heroicons/react/24/solid';

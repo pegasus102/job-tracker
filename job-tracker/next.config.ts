@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  outputFileTracingIncludes: {
+    '/api/export-docx': ['./assets/fonts/*.ttf', './assets/fonts/OFL.txt'],
+  },
 };
 
 export default nextConfig;

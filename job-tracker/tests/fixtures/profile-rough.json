@@ -1,0 +1,18 @@
+{
+  "master_projects": [
+    {
+      "id": "rough-project",
+      "title": "Internal Tool",
+      "tech_stack": ["JavaScript"],
+      "bullets": [
+        "Did many things for a team and made the tool better.",
+        "Worked on various improvements and helped users."
+      ]
+    }
+  ],
+  "master_experience": [],
+  "master_skills": [
+    { "category": "Languages", "items": "JavaScript" }
+  ],
+  "fixed_details": { "full_name": "Example Candidate" }
+}

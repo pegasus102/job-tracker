@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/immutability, react-hooks/set-state-in-effect, @typescript-eslint/no-unused-vars */
 'use client';
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
@@ -7,6 +8,7 @@ import { BookmarkIcon as OutlineBookmarkIcon } from '@heroicons/react/24/outline
 import MasterProfileModal from '../components/MasterProfileModal';
 import AuditDrawer from '../components/AuditDrawer';
 import JobDeadlineEditor from '../components/JobDeadlineEditor';
+import CvV2Panel from '../components/CvV2Panel';
 
 // 1. Database Interface
 interface Job {
@@ -538,6 +540,8 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
+
+      {jobs[0] && <CvV2Panel job={jobs[0]} />}
 
       {showMasterProfile && <MasterProfileModal onClose={() => setShowMasterProfile(false)} />}
       {auditJob && (

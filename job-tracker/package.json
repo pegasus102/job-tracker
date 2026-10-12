@@ -6,9 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "verify": "tsc --noEmit && eslint . && vitest run && NEXT_PUBLIC_SUPABASE_URL=http://localhost NEXT_PUBLIC_SUPABASE_ANON_KEY=x SUPABASE_SERVICE_ROLE_KEY=x npm run build",
+    "calibrate": "tsx scripts/calibrate-fit.ts",
+    "eval:quality": "tsx scripts/eval-quality.ts",
+    "check:env": "tsx scripts/check-env.ts"
   },
   "dependencies": {
+    "@fontsource/carlito": "^5.3.0",
     "@google-cloud/vertexai": "^1.12.0",
     "@google/genai": "^2.28.0",
     "@heroicons/react": "^2.2.0",
@@ -16,10 +22,13 @@
     "cheerio": "^1.2.0",
     "date-fns": "^4.4.0",
     "docx": "^9.7.1",
+    "fontkit": "^2.0.4",
     "jsonrepair": "^3.15.0",
     "next": "16.3.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "^3.25.76",
+    "zod-to-json-schema": "^3.25.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -29,6 +38,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.19.2",
+    "typescript": "^5",
+    "vitest": "^2.1.9"
   }
 }
