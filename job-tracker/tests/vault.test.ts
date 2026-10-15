@@ -79,4 +79,71 @@ describe('buildCandidateVault', () => {
     expect(first.projects[0].facts[0].id).toBe(second.projects[0].facts[0].id);
     expect(first.projects[0].facts[0].warnings).toContain('May contain more than one claim');
   });
+
+  it('drops facts with no letter or digit, counts them, and lists them', () => {
+    const input = {
+      master_projects: [
+        {
+          id: 'p-hybrid',
+          title: 'Hybrid',
+          tech_stack: 'Python',
+          bullets: ['•', 'Designed a full-stack web application with Flask', '•', '   ', 'Integrated Firebase Realtime Database'],
+        },
+      ],
+      master_experience: [
+        {
+          id: 'e-hybrid',
+          role: 'Intern',
+          company: 'Org',
+          duration: '2024',
+          bullets: ['•', 'Architected a secure QR-based system', '•'],
+        },
+      ],
+    };
+    const vault = buildCandidateVault(input);
+    expect(vault.droppedEmptyBulletsCount).toBe(5);
+    expect(vault.droppedEmptyBullets).toHaveLength(5);
+    expect(vault.projects[0].facts).toHaveLength(2);
+    expect(vault.experience[0].facts).toHaveLength(1);
+    expect(vault.projects[0].facts[0].text).toBe('Designed a full-stack web application with Flask');
+    expect(vault.projects[0].facts[1].text).toBe('Integrated Firebase Realtime Database');
+  });
+
+  it('filters out bullets without letters or digits (e.g. stray • bullets)', () => {
+    const input = {
+      master_projects: [
+        {
+          id: 'p-clean',
+          title: 'Project Clean',
+          tech_stack: 'Python, Flask',
+          bullets: [
+            '•',
+            'Designed a full-stack web application with Flask REST API endpoints',
+            '•',
+            'Integrated Firebase Realtime Database with WebSocket connections',
+            '   ',
+            '---',
+          ],
+        },
+      ],
+      master_experience: [
+        {
+          id: 'e-clean',
+          role: 'Intern',
+          company: 'Lab',
+          bullets: [
+            '•',
+            'Architected a secure QR-based system using Python Flask',
+          ],
+        },
+      ],
+    };
+    const vault = buildCandidateVault(input);
+    expect(vault.projects[0].facts).toHaveLength(2);
+    expect(vault.projects[0].facts[0].text).toContain('Designed a full-stack web application');
+    expect(vault.projects[0].facts[1].text).toContain('Integrated Firebase Realtime Database');
+    expect(vault.experience[0].facts).toHaveLength(1);
+    expect(vault.droppedEmptyBulletsCount).toBe(5);
+    expect(vault.droppedEmptyBullets?.map((b) => b.rawText)).toEqual(['•', '•', '   ', '---', '•']);
+  });
 });

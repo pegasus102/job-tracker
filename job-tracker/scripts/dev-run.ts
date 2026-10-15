@@ -160,7 +160,42 @@ async function runSelection(
 
 async function main(): Promise<void> {
   loadLocalEnv();
-  const company = argument('--company') ?? 'Fixture Company';
+
+  const isWrite = process.argv.includes('--write');
+  const isWriteFit = process.argv.includes('--write-fit');
+  const isFit = process.argv.includes('--fit');
+  const isJob = process.argv.includes('--job') || process.argv.includes('--job-json');
+  const isReview = process.argv.includes('--review');
+  const forceJd = process.argv.includes('--force-jd');
+  const verbose = process.argv.includes('--verbose');
+
+  // Guard: --fit with --job / --write / --review exits with a clear error
+  if (isFit && (isJob || isWrite || isReview || isWriteFit)) {
+    console.error('Error: --fit cannot be combined with --job, --write, or --review. Use --write-fit instead to write and fit a generated CV.');
+    process.exit(1);
+  }
+
+  const companyArg = argument('--company');
+  const roleArg = argument('--role');
+
+  const validateRoleCompany = (value: string | undefined, flag: string) => {
+    if (!value || value.trim().length === 0) {
+      console.error(`Error: ${flag} is required for writing. Cannot be empty.`);
+      process.exit(1);
+    }
+    if (value.includes('<') || value.includes('>')) {
+      console.error(`Error: ${flag} contains forbidden characters ("<" or ">").`);
+      process.exit(1);
+    }
+  };
+
+  if (isWrite || isWriteFit) {
+    validateRoleCompany(roleArg, '--role');
+    validateRoleCompany(companyArg, '--company');
+  }
+
+  const company = companyArg ?? 'Fixture Company';
+  const role = roleArg ?? 'Software Engineer';
   const profileArgument = argument('--profile');
   const profileShape = profileArgument === 'raw' || profileArgument === 'nested' ? profileArgument : undefined;
   const profilePath = resolve(process.cwd(), process.argv.includes('--profile-large')
@@ -174,7 +209,8 @@ async function main(): Promise<void> {
   const cache = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
     ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
     : undefined;
-  if (process.argv.includes('--fit')) {
+
+  if (isFit) {
     const cv = {
       experience: ((profile.master_experience as Record<string, unknown>[]) ?? []).map((entry) => ({ role: entry.role, company: entry.company, duration: entry.duration, bullets: entry.bullets ?? [] })),
       projects: ((profile.master_projects as Record<string, unknown>[]) ?? []).map((entry) => ({ title: entry.title, tech_stack: entry.tech_stack, bullets: entry.bullets ?? [] })),
@@ -192,12 +228,12 @@ async function main(): Promise<void> {
       ['Software Engineer', 'tests/fixtures/job-software.txt'],
       ['Data Scientist', 'tests/fixtures/job-data.txt'],
     ] as const;
-    for (const [role, relativePath] of jobs) {
+    for (const [allRole, relativePath] of jobs) {
       const client = createCvClient();
       try {
-        await runSelection(profile, await readFile(resolve(process.cwd(), relativePath), 'utf8'), role, company, client, cache, process.argv.includes('--verbose'), process.argv.includes('--write'));
+        await runSelection(profile, await readFile(resolve(process.cwd(), relativePath), 'utf8'), allRole, company, client, cache, verbose, isWrite);
       } catch (error) {
-        console.error(`JOB FAILED: ${role}: ${error instanceof Error ? error.message : String(error)}`);
+        console.error(`JOB FAILED: ${allRole}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     return;
@@ -208,7 +244,7 @@ async function main(): Promise<void> {
   const jobJsonPath = argument('--job-json');
   if (jobJsonPath) {
     jobRow = JSON.parse(await readFile(resolve(process.cwd(), jobJsonPath), 'utf8')) as Record<string, unknown>;
-    const prepared = requireUsableJobInput(prepareJobInput(jobRow));
+    const prepared = requireUsableJobInput(prepareJobInput(jobRow), { forceJd });
     console.log('JD quality:', JSON.stringify(prepared.quality, null, 2));
     console.log(`Cleaned length: ${prepared.jdText.length}`);
     console.log(`First 600 characters:\n${prepared.jdText.slice(0, 600)}`);
@@ -219,7 +255,6 @@ async function main(): Promise<void> {
   } else {
     jobDescription = await readFile(jobPath, 'utf8');
   }
-  const role = argument('--role') ?? 'Software Engineer';
   const client = createCvClient();
   const startedAt = Date.now();
   const callsAtStart = client.getCallCount();
@@ -227,7 +262,7 @@ async function main(): Promise<void> {
     company_name: jobRow?.company_name ?? company,
     role_offered: jobRow?.role_offered ?? role,
     job_description_raw: jobDescription,
-  }));
+  }), { forceJd });
   const effectiveCompany = prepared.company || company;
   const effectiveRole = prepared.role || role;
   const analysis = applyLowTechnicalSignal(await analyzeJobDescription({ jobDescription: prepared.jdText, client }));
@@ -262,7 +297,9 @@ async function main(): Promise<void> {
     }))));
     return;
   }
-  if (process.argv.includes('--write')) {
+  if (process.argv.includes('--write') || isWriteFit) {
+    console.log(`Role family: ${analysis.role_family ?? 'other'}; low_technical_signal: ${analysis.low_technical_signal ? 'true' : 'false'}`);
+    console.log('Requirements:', analysis.requirements.map((item) => `${item.id} [${item.kind ?? (item.technical ? 'tool' : 'soft')}${item.source === 'role_family_default' ? ', default' : ''}] ${item.text}`).join(' | '));
     const vault = buildCandidateVault(profile);
     const requirements = analysis.requirements.filter((requirement) => requirement.technical);
     const scoring = await scoreProjects({ projects: vault.projects, requirements, client, runs: cache });
@@ -271,30 +308,97 @@ async function main(): Promise<void> {
     const writingCallsAtStart = client.getCallCount();
     const budgets = deriveWritingBudgets();
     const writing = await writeCvDetailed({ analysis, research: research.notes, selection, vault, styleExamples, client, runs: cache, budgets });
-    const output = writing.result;
+    let output = writing.result;
     const validation = validateWriting(output, { analysis, selection, vault, budgets });
     console.log('Budget report:', writingBudgetReport(output, budgets));
     console.log(`Requirements: ${requirements.map((requirement) => `${requirement.id} (${requirement.weight}): ${requirement.text}`).join(' | ')}`);
     console.log(`Repair attempts used: ${Math.max(0, client.getCallCount() - writingCallsAtStart - 1)}`);
     console.log(`Uncovered requirements: ${selection.uncovered_requirements.map((requirement) => `${requirement.id} (${requirement.weight}): ${requirement.text}`).join(' | ') || 'None'}`);
-    console.log(JSON.stringify(output, null, 2));
-    output.projects.forEach((project) => project.bullets.forEach((bullet) => console.log(`Bullet ${project.project_id}: ${bullet.text.length}/90 chars`)));
-    output.experience.forEach((entry) => entry.bullets.forEach((bullet) => console.log(`Bullet ${entry.experience_id}: ${bullet.text.length}/90 chars`)));
+    output.projects.forEach((project) => {
+      console.log(`Project ${project.project_id}: ${project.stack_order.join(', ')}`);
+      project.bullets.forEach((bullet) => console.log(`- ${bullet.text} (${bullet.text.length}/${budgets.project} chars) [${bullet.source_fact_ids.join(', ')}]`));
+    });
+    output.experience.forEach((entry) => {
+      console.log(`Experience ${entry.experience_id}`);
+      entry.bullets.forEach((bullet) => console.log(`- ${bullet.text} (${bullet.text.length}/${budgets.experience} chars) [${bullet.source_fact_ids.join(', ')}]`));
+    });
+
+    const factTexts = new Map(vault.projects.concat(vault.experience).flatMap((entry) => entry.facts.map((fact) => [fact.id, fact.text] as const)));
+    const flatBullets = [
+      ...output.projects.flatMap((entry) => entry.bullets.map((bullet) => ({ entryId: entry.project_id, text: bullet.text, sourceFactIds: bullet.source_fact_ids }))),
+      ...output.experience.flatMap((entry) => entry.bullets.map((bullet) => ({ entryId: entry.experience_id, text: bullet.text, sourceFactIds: bullet.source_fact_ids }))),
+    ];
+    const similarity = reportBulletSimilarity(flatBullets, factTexts);
+    if (verbose) {
+      console.log('Per-bullet similarity:');
+      similarity.forEach((item) => {
+        console.log(`  [${item.entryId}] (${item.similarity.toFixed(2)}) ${item.nearVerbatim ? '[NEAR-VERBATIM]' : '[REWRITTEN]'} ${item.bulletText}`);
+      });
+    } else {
+      console.log('Bullet similarity:', similarity.map((item) => `${item.entryId}: ${item.similarity.toFixed(2)}${item.nearVerbatim ? ' near-verbatim' : ' rewritten'}`).join(' | '));
+    }
+    const nearVerbatimCount = similarity.filter((item) => item.nearVerbatim).length;
+    const rewrittenCount = similarity.filter((item) => !item.nearVerbatim).length;
+    const ratio = similarity.length === 0 ? 0 : (nearVerbatimCount / similarity.length) * 100;
+    console.log(`Near-verbatim summary: total=${similarity.length}, near-verbatim=${nearVerbatimCount}, rewritten=${rewrittenCount}, ratio=${ratio.toFixed(1)}%`);
+
+    const quality = lintBullets([
+      ...output.projects.flatMap((entry, entryIndex) => entry.bullets.map((bullet, index) => ({ path: `projects.${entryIndex}.bullets.${index}`, text: bullet.text }))),
+      ...output.experience.flatMap((entry, entryIndex) => entry.bullets.map((bullet, index) => ({ path: `experience.${entryIndex}.bullets.${index}`, text: bullet.text }))),
+    ], budgets);
+    console.log(`Bullet quality warnings: ${quality.warnings.length}; counts: ${JSON.stringify(quality.counts)}`);
+    output.skills.forEach((group) => console.log(`Skills ${group.category}: ${group.items.join(', ')}`));
+    output.added_skills.forEach((skill) => console.log(`Added skill ${skill.name}: ${skill.reason} [${skill.related_fact_ids.join(', ')}]`));
     if (validation.violations.length === 0 && validation.warnings.length === 0) console.log('Validation: PASSED');
     else [...validation.violations, ...validation.warnings].forEach((item, index) => console.log(`${index + 1}. ${item.path}: ${item.message}`));
     console.log('Sanitizations:');
     writing.sanitizations.forEach((item) => console.log(`- ${item.path}: ${item.message}`));
     console.log('Warnings:');
     validation.warnings.forEach((item) => console.log(`- ${item.path}: ${item.message}`));
-    if (process.argv.includes('--review')) {
+
+    if (process.argv.includes('--review') || isWriteFit) {
       const review = await reviewAndRevise({ cv: output, analysis, selection, vault, client, runs: cache });
       console.log('Critic issues:', review.critic.issues);
       console.log(`Revision kept: ${review.revisionKept}`);
+      output = review.cv;
       const ats = scoreAtsProxy(review.cv, analysis);
       console.log(`ATS keyword coverage proxy: ${ats.score.toFixed(1)}`);
       console.log('Matched:', ats.matched.join(', ') || 'None');
       console.log('Missing:', ats.missing.map((item) => `${item.requirement} — ${item.ask_user}`).join(' | ') || 'None');
     }
+
+    if (isWriteFit) {
+      // Fit the GENERATED CV, same path as v2 export route, then write out/cv.private.docx
+      const projectMap = new Map(vault.projects.map((p) => [p.id, p]));
+      const experienceMap = new Map(vault.experience.map((e) => [e.id, e]));
+      const fittedInputCv = {
+        experience: output.experience.map((e) => {
+          const exp = experienceMap.get(e.experience_id);
+          return {
+            role: exp?.role ?? e.experience_id,
+            company: exp?.company ?? '',
+            duration: exp?.duration ?? '',
+            bullets: e.bullets.map((b) => b.text),
+          };
+        }),
+        projects: output.projects.map((p) => {
+          const proj = projectMap.get(p.project_id);
+          return {
+            title: proj?.title ?? p.project_id,
+            tech_stack: p.stack_order.join(', '),
+            bullets: p.bullets.map((b) => b.text),
+          };
+        }),
+        skills: output.skills.map((s) => ({ category: s.category, items: s.items.join(', ') })),
+        certifications: profile.master_certifications ?? [],
+        extracurriculars: profile.master_extracurriculars ?? [],
+      };
+      const fitResult = await fitCv(profile, fittedInputCv, { metrics: loadCarlitoMetrics() });
+      await mkdir(resolve(process.cwd(), 'out'), { recursive: true });
+      await writeFile(resolve(process.cwd(), 'out/cv.private.docx'), fitResult.buffer);
+      console.log(`Write-fit complete in ${fitResult.iterations} iterations; estimated pages: ${fitResult.estimate.estimatedPages}; lines: ${fitResult.estimate.lines}; written to out/cv.private.docx`);
+    }
+
     console.log(`Total calls: ${client.getCallCount() - callsAtStart}; elapsed: ${Date.now() - startedAt}ms`);
     return;
   }

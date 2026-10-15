@@ -105,7 +105,10 @@ export async function buildCvDocx(profile: CvProfile, cv: CvDocument, layout: Cv
       String(exp.duration || '')
       )
     );
-    for (const b of (Array.isArray(exp.bullets) ? exp.bullets : [])) children.push(bullet(String(b)));
+    for (const b of (Array.isArray(exp.bullets) ? exp.bullets : [])) {
+      const bulletText = String(b).trim();
+      if (/[a-zA-Z0-9]/.test(bulletText)) children.push(bullet(bulletText));
+    }
     }
   }
 
@@ -124,7 +127,10 @@ export async function buildCvDocx(profile: CvProfile, cv: CvDocument, layout: Cv
       ],
       })
     );
-    for (const b of (Array.isArray(proj.bullets) ? proj.bullets : [])) children.push(bullet(String(b)));
+    for (const b of (Array.isArray(proj.bullets) ? proj.bullets : [])) {
+      const bulletText = String(b).trim();
+      if (/[a-zA-Z0-9]/.test(bulletText)) children.push(bullet(bulletText));
+    }
     }
   }
 
@@ -146,14 +152,20 @@ export async function buildCvDocx(profile: CvProfile, cv: CvDocument, layout: Cv
 
   // --- Certifications: always the full vault list, its own section ---
   if (Array.isArray(cv.certifications) && cv.certifications.length > 0) {
-    children.push(sectionHeading('Certifications'));
-    for (const cert of cv.certifications) children.push(bullet(String(cert)));
+    const validCerts = cv.certifications.map((c) => String(c).trim()).filter((c) => /[a-zA-Z0-9]/.test(c));
+    if (validCerts.length > 0) {
+      children.push(sectionHeading('Certifications'));
+      for (const cert of validCerts) children.push(bullet(cert));
+    }
   }
 
   // --- Extracurriculars: always the full vault list, its own section ---
   if (Array.isArray(cv.extracurriculars) && cv.extracurriculars.length > 0) {
-    children.push(sectionHeading('Extracurriculars'));
-    for (const ex of cv.extracurriculars) children.push(bullet(String(ex)));
+    const validExtras = cv.extracurriculars.map((e) => String(e).trim()).filter((e) => /[a-zA-Z0-9]/.test(e));
+    if (validExtras.length > 0) {
+      children.push(sectionHeading('Extracurriculars'));
+      for (const ex of validExtras) children.push(bullet(ex));
+    }
   }
 
   const doc = new Document({ sections: [{ properties: { page: { margin: layout.margins } }, children }] });

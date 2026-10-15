@@ -193,9 +193,102 @@ describe('Phase 5 writing validation', () => {
   it('repairs hard validation failures once', async () => {
     const invalid = base();
     invalid.projects[0].stack_order = ['Rust'];
+    // valid has corrected stack_order to repair the hard violation, while bullets match base()
     const valid = base();
+    valid.projects[0].stack_order = ['TypeScript', 'PostgreSQL'];
+    // Use rewritten bullets with similarity < 0.9 to avoid triggering near-verbatim gate
+    invalid.projects[0].bullets[0].text = 'Engineered a query service serving 12 clients in production';
+    invalid.experience[0].bullets[0].text = 'Developed automation scripts using Python for periodic summaries';
+    valid.projects[0].bullets[0].text = 'Engineered a query service serving 12 clients in production';
+    valid.experience[0].bullets[0].text = 'Developed automation scripts using Python for periodic summaries';
     const client = { generateValidatedJson: vi.fn().mockResolvedValueOnce({ value: invalid }).mockResolvedValueOnce({ value: valid }) };
     await expect(writeCv({ analysis, selection, vault, client: client as never })).resolves.toEqual(valid);
     expect(client.generateValidatedJson).toHaveBeenCalledTimes(2);
+  });
+
+  it('triggers near-verbatim revision when more than 30% of bullets are near-verbatim', async () => {
+    const verbatimOutput = base(); // Has 100% near-verbatim bullets (similarity 1.0)
+    const rewrittenOutput = base();
+    rewrittenOutput.projects[0].bullets[0].text = 'Engineered a query service serving 12 clients in production';
+    rewrittenOutput.experience[0].bullets[0].text = 'Developed automation scripts using Python for periodic summaries';
+
+    const client = {
+      generateValidatedJson: vi.fn()
+        .mockResolvedValueOnce({ value: verbatimOutput })
+        .mockResolvedValueOnce({ value: rewrittenOutput }),
+    };
+
+    const result = await writeCv({ analysis, selection, vault, client: client as never });
+    expect(client.generateValidatedJson).toHaveBeenCalledTimes(2);
+    expect(result.projects[0].bullets[0].text).toBe(rewrittenOutput.projects[0].bullets[0].text);
+  });
+
+  it('keeps original with warning when near-verbatim revision fails to reduce similarity', async () => {
+    const verbatimOutput = base();
+    const stillVerbatimOutput = base();
+
+    const client = {
+      generateValidatedJson: vi.fn()
+        .mockResolvedValueOnce({ value: verbatimOutput })
+        .mockResolvedValueOnce({ value: stillVerbatimOutput }),
+    };
+
+    const result = await writeCv({ analysis, selection, vault, client: client as never });
+    expect(client.generateValidatedJson).toHaveBeenCalledTimes(2);
+    expect(result.projects[0].bullets[0].text).toBe(verbatimOutput.projects[0].bullets[0].text);
+  });
+
+  it('rejects cross-entry citation in a bullet', () => {
+    const output = base();
+    // Bullet cites fact from project p1 and experience e1
+    output.projects[0].bullets[0].source_fact_ids = [vault.projects[0].facts[0].id, vault.experience[0].facts[0].id];
+    const result = check(output);
+    expect(result.violations.some((item) => item.message.includes('Fact ID is missing or belongs to another entry'))).toBe(true);
+  });
+
+  it('rejects more than 2 cited facts per bullet', () => {
+    const multiFactVault = buildCandidateVault({
+      master_projects: [{
+        id: 'p1',
+        title: 'Project',
+        tech_stack: 'TS',
+        bullets: ['Fact 1', 'Fact 2', 'Fact 3'],
+      }],
+    });
+    const output = base();
+    output.projects[0].bullets[0].source_fact_ids = multiFactVault.projects[0].facts.map((f) => f.id);
+    const result = validateWriting(output, { analysis, selection, vault: multiFactVault });
+    expect(result.violations.some((item) => item.message.includes('At most 2 source facts'))).toBe(true);
+  });
+
+  it('rejects uncited number in bullet union', () => {
+    const output = base();
+    output.projects[0].bullets[0].text = 'Built an API processing 12 users and 99 endpoints';
+    output.projects[0].bullets[0].source_fact_ids = [vault.projects[0].facts[0].id];
+    const result = check(output);
+    expect(result.violations.some((item) => item.message.includes('Invented number 99'))).toBe(true);
+  });
+
+  it('warns when concrete JD-relevant term is dropped (specificity check)', () => {
+    const jdAnalysis = {
+      role: 'Engineer',
+      seniority: 'Junior',
+      requirements: [{ id: 'r1', text: 'PostgreSQL database', type: 'must' as const, weight: 3 as const, technical: true }],
+      keywords: ['postgresql'],
+    };
+    const specVault = buildCandidateVault({
+      master_projects: [{
+        id: 'p1',
+        title: 'API',
+        tech_stack: 'PostgreSQL',
+        bullets: ['Built a data service with PostgreSQL for querying records'],
+      }],
+    });
+    const output = base();
+    // Bullet drops PostgreSQL
+    output.projects[0].bullets[0].text = 'Built a data service for querying records';
+    output.projects[0].bullets[0].source_fact_ids = [specVault.projects[0].facts[0].id];
+    const result = validateWriting(output, { analysis: jdAnalysis, selection, vault: specVault });
+    expect(result.warnings.some((w) => w.message.includes('Lost concrete JD-relevant term'))).toBe(true);
   });
 });

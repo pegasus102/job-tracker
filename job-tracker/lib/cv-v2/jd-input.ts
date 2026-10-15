@@ -137,7 +137,17 @@ export function prepareJobInput(jobRow: JobInputRow): PreparedJobInput {
   };
 }
 
-export function requireUsableJobInput(input: PreparedJobInput): PreparedJobInput {
-  if (input.quality.status === 'poor') throw new JdNeedsReviewError();
+export function requireUsableJobInput(input: PreparedJobInput, options?: { forceJd?: boolean }): PreparedJobInput {
+  if (input.quality.status === 'poor') {
+    if (options?.forceJd) {
+      console.warn(`[DEV ONLY] --force-jd bypassed rejected JD: length=${input.quality.chars}, sections=[${input.quality.sectionsFound.join(', ')}]`);
+      return input;
+    }
+    const reasons: string[] = [];
+    if (input.quality.chars < 400) reasons.push(`too short (${input.quality.chars} chars < 400 min)`);
+    if (!ROLE_PATTERN.test(input.jdText)) reasons.push('missing role/responsibilities/requirements keywords');
+    if (/^(?:log in|sign in|access denied|enable javascript|cookies required)/i.test(input.jdText)) reasons.push('looks like a login wall or access block');
+    throw new JdNeedsReviewError(`The scraped job description looks incomplete (${reasons.join(', ')}). Paste the job description manually.`);
+  }
   return input;
 }

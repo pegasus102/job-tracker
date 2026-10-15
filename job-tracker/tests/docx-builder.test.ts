@@ -51,4 +51,21 @@ describe('DOCX builder', () => {
       metrics.widthOfStyledTextAtSize?.('Project title', 10, 'regular') ?? 0,
     );
   });
+
+  it('filters empty or symbol-only bullets in projects and experience', async () => {
+    const cvWithEmpty = {
+      experience: [{ role: 'Engineer', company: 'Example', duration: '2020-2022', bullets: ['•', 'Built a service', '   ', '•'] }],
+      projects: [{ title: 'Order API', tech_stack: 'TypeScript, PostgreSQL', bullets: ['•', 'Added indexed queries', '•'] }],
+      skills: [{ category: 'Languages', items: 'TypeScript' }],
+      certifications: ['•', 'Valid Cert', '  '],
+      extracurriculars: ['•', 'Valid Extra'],
+    };
+    const xml = documentXml(await buildCvDocx(profile, cvWithEmpty));
+    expect(xml).toContain('Built a service');
+    expect(xml).toContain('Added indexed queries');
+    expect(xml).toContain('Valid Cert');
+    expect(xml).toContain('Valid Extra');
+    // None of the empty bullets should be rendered
+    expect(xml).not.toContain('<w:t>•</w:t>');
+  });
 });

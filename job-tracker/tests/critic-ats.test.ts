@@ -55,4 +55,43 @@ describe('Phase 6 critic and ATS proxy', () => {
     });
     expect(result.score).toBe(50);
   });
+
+  it('deterministically applies critic lost_specificity fixes when valid', async () => {
+    const specVault = buildCandidateVault({
+      master_experience: [{
+        id: 'e1',
+        role: 'Intern',
+        company: 'ISI',
+        duration: '2025',
+        bullets: ['Sustained 99.5% uptime across distributed clients during load testing.'],
+      }],
+    });
+    const factId = specVault.experience[0].facts[0].id;
+    const testCv: WritingResult = {
+      projects: [],
+      experience: [{
+        experience_id: 'e1',
+        bullets: [{ text: 'Sustained 99.5% uptime across distributed clients in testing.', source_fact_ids: [factId], priority: 1 }],
+      }],
+      skills: [],
+      added_skills: [],
+    };
+    const client = {
+      generateValidatedJson: vi.fn().mockResolvedValue({
+        value: {
+          issues: [{
+            path: 'experience.0.bullets.0',
+            severity: 'medium',
+            type: 'lost_specificity',
+            message: 'Dropped context "load testing"',
+            suggested_fix: 'Sustained 99.5% uptime across distributed clients during load testing.',
+          }],
+          pass: false,
+        },
+      }),
+    };
+    const result = await reviewAndRevise({ cv: testCv, analysis, selection, vault: specVault, client: client as never });
+    expect(result.revisionKept).toBe(true);
+    expect(result.cv.experience[0].bullets[0].text).toBe('Sustained 99.5% uptime across distributed clients during load testing.');
+  });
 });

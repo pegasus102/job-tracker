@@ -39,6 +39,8 @@ export type CandidateVault = {
   projects: VaultEntry[];
   experience: VaultExperienceEntry[];
   skills: VaultSkillGroup[];
+  droppedEmptyBulletsCount?: number;
+  droppedEmptyBullets?: Array<{ entryId: string; entryTitle: string; rawText: string }>;
 };
 
 type StoredProject = {
@@ -63,6 +65,11 @@ type StoredSkillGroup = {
 
 const NUMBER_PATTERN = /(?<!\w)(?:\d+(?:\.\d+)?(?:[kKmMbB])?%?|\.\d+(?:[kKmMbB])?%?)(?!\w)/g;
 const CLAIM_SPLIT_PATTERN = /[.!?;]\s+|\s+\b(?:and|while|then|also)\b\s+/i;
+const HAS_LETTER_OR_DIGIT = /[a-zA-Z0-9]/;
+
+export function isMeaningfulBullet(text: string): boolean {
+  return HAS_LETTER_OR_DIGIT.test(text);
+}
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -89,18 +96,20 @@ function factWarnings(text: string, tools: string[], numbers: string[]): string[
 }
 
 function createFacts(entryId: string, bullets: unknown, tools: string[]): VaultFact[] {
-  return asStringArray(bullets).map((text) => {
-    const digest = createHash('sha1').update(text).digest('hex').slice(0, 8);
-    const numbers = [...new Set(text.match(NUMBER_PATTERN) ?? [])];
-    const factTools = tools.filter((tool) => text.toLocaleLowerCase().includes(tool.toLocaleLowerCase()));
-    return {
-      id: `${entryId}.${digest}`,
-      text,
-      tools: factTools,
-      numbers,
-      warnings: factWarnings(text, factTools, numbers),
-    };
-  });
+  return asStringArray(bullets)
+    .filter(isMeaningfulBullet)
+    .map((text) => {
+      const digest = createHash('sha1').update(text).digest('hex').slice(0, 8);
+      const numbers = [...new Set(text.match(NUMBER_PATTERN) ?? [])];
+      const factTools = tools.filter((tool) => text.toLocaleLowerCase().includes(tool.toLocaleLowerCase()));
+      return {
+        id: `${entryId}.${digest}`,
+        text,
+        tools: factTools,
+        numbers,
+        warnings: factWarnings(text, factTools, numbers),
+      };
+    });
 }
 
 function projectEntry(value: StoredProject, index: number): VaultEntry {
@@ -128,11 +137,35 @@ function experienceEntry(value: StoredExperience, index: number): VaultExperienc
 }
 
 export function buildCandidateVault(profile: MasterProfileRow): CandidateVault {
+  const droppedEmptyBullets: Array<{ entryId: string; entryTitle: string; rawText: string }> = [];
+
+  const inspectBullets = (entryId: string, entryTitle: string, bullets: unknown) => {
+    if (Array.isArray(bullets)) {
+      for (const b of bullets) {
+        if (typeof b === 'string' && !isMeaningfulBullet(b)) {
+          droppedEmptyBullets.push({ entryId, entryTitle, rawText: b });
+        }
+      }
+    }
+  };
+
   const projects = Array.isArray(profile.master_projects)
-    ? profile.master_projects.map((value, index) => projectEntry((value ?? {}) as StoredProject, index))
+    ? profile.master_projects.map((value, index) => {
+        const p = (value ?? {}) as StoredProject;
+        const id = asString(p.id) || `project-${index + 1}`;
+        const title = asString(p.title);
+        inspectBullets(id, title, p.bullets);
+        return projectEntry(p, index);
+      })
     : [];
   const experience = Array.isArray(profile.master_experience)
-    ? profile.master_experience.map((value, index) => experienceEntry((value ?? {}) as StoredExperience, index))
+    ? profile.master_experience.map((value, index) => {
+        const e = (value ?? {}) as StoredExperience;
+        const id = asString(e.id) || `experience-${index + 1}`;
+        const title = asString(e.role) || asString(e.company) || id;
+        inspectBullets(id, title, e.bullets);
+        return experienceEntry(e, index);
+      })
     : [];
   const skills = Array.isArray(profile.master_skills)
     ? profile.master_skills.map((value) => {
@@ -141,7 +174,13 @@ export function buildCandidateVault(profile: MasterProfileRow): CandidateVault {
       })
     : [];
 
-  return { projects, experience, skills };
+  return {
+    projects,
+    experience,
+    skills,
+    droppedEmptyBulletsCount: droppedEmptyBullets.length,
+    droppedEmptyBullets,
+  };
 }
 
 export async function readCandidateVault(

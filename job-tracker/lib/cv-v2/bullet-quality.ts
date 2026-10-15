@@ -23,10 +23,11 @@ export function lintBulletQuality(text: string, budget = 90): BulletQualityWarni
 
 export function lintBullets(
   bullets: Array<{ path: string; text: string }>,
-  budgets: { project: number; experience: number } = { project: 90, experience: 90 },
+  budgets?: { project: number; experience: number },
 ): { warnings: Array<BulletQualityWarning & { path: string }>; counts: Record<string, number> } {
+  const effectiveBudgets = budgets ?? { project: 90, experience: 90 };
   const warnings = bullets.flatMap(({ path, text }) =>
-    lintBulletQuality(text, path.startsWith('experience') ? budgets.experience : budgets.project)
+    lintBulletQuality(text, path.startsWith('experience') ? effectiveBudgets.experience : effectiveBudgets.project)
       .map((warning) => ({ path, ...warning }))
   );
   const counts = warnings.reduce<Record<string, number>>((result, warning) => {

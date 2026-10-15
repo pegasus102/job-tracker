@@ -33,6 +33,23 @@ export default async function VaultReviewPage() {
           <p className="mt-2 text-sm text-slate-600">
             Read-only facts derived from the existing master profile; edit source entries in the Master Profile modal.
           </p>
+          {Boolean(vault.droppedEmptyBulletsCount && vault.droppedEmptyBulletsCount > 0) && (
+            <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+              <h2 className="font-semibold text-sm">
+                Dropped Empty / Symbol-Only Bullets ({vault.droppedEmptyBulletsCount})
+              </h2>
+              <p className="mt-1 text-xs text-amber-700">
+                These items contain no letters or digits and were excluded from scoring, writing, and export:
+              </p>
+              <ul className="mt-2 list-disc list-inside text-xs space-y-1">
+                {vault.droppedEmptyBullets?.map((dropped, idx) => (
+                  <li key={idx}>
+                    <span className="font-medium">{dropped.entryTitle || dropped.entryId}:</span> &quot;{dropped.rawText}&quot;
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </header>
 
         <Section title="Projects">

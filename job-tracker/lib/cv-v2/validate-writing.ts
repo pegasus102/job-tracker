@@ -53,7 +53,7 @@ function tools(entry: VaultEntry): Set<string> {
   return new Set(entry.tools.map((tool) => tool.toLocaleLowerCase()));
 }
 
-function skillVocabulary(input: { vault: CandidateVault }): Set<string> {
+export function skillVocabulary(input: { vault: CandidateVault }): Set<string> {
   const values = [
     ...input.vault.skills.flatMap((group) => group.items.split(',').map((item) => item.trim())),
     ...input.vault.projects.flatMap((entry) => entry.tools),
@@ -87,6 +87,38 @@ function permutation(actual: string[], expected: string[]): boolean {
   return actual.length === expected.length && actual.every((item, index) => item === expected[index] || expected.includes(item)) && new Set(actual).size === new Set(expected).size && actual.every((item) => expected.includes(item));
 }
 
+export function validateCandidateBulletFix(
+  bullet: WritingResult['projects'][number]['bullets'][number],
+  entry: VaultEntry,
+  analysis: JdAnalysis,
+  vocabulary: Set<string>,
+): boolean {
+  const cited = facts(entry, bullet.source_fact_ids);
+  if (cited.length !== bullet.source_fact_ids.length || cited.length === 0) return false;
+  if (bullet.source_fact_ids.length > 2) return false;
+  const citedText = cited.map((fact) => fact.text).join(' ').toLocaleLowerCase();
+  const bulletNumbers = bullet.text.match(NUMBER_PATTERN) ?? [];
+  for (const number of bulletNumbers) {
+    if (!citedText.includes(number.toLocaleLowerCase())) return false;
+    for (const fact of cited) {
+      const sentence = sourceSentence(fact.text, number);
+      for (const qualifier of nearbyQualifiers(sentence, number)) {
+        if (!bullet.text.toLocaleLowerCase().includes(qualifier)) return false;
+      }
+      const baseline = baselineFor(sentence, number);
+      if (baseline && !bullet.text.includes(baseline)) return false;
+    }
+  }
+  if (cited.length > 1 && CAUSAL.test(bullet.text)) return false;
+  const entryTools = tools(entry);
+  for (const term of vocabulary) {
+    if (bullet.text.toLocaleLowerCase().includes(term) && !citedText.includes(term) && !entryTools.has(term)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function validateWriting(
   output: WritingResult,
   input: { analysis: JdAnalysis; selection: ProjectSelection; vault: CandidateVault; budgets?: { project: number; experience: number } },
@@ -96,7 +128,7 @@ export function validateWriting(
   const projectMap = new Map(input.vault.projects.map((entry) => [entry.id, entry]));
   const experienceMap = new Map(input.vault.experience.map((entry) => [entry.id, entry]));
   const selectedIds = input.selection.chosen.map((item) => item.project.id);
-  if (output.projects.map((project) => project.project_id).sort().join() !== [...selectedIds].sort().join()) {
+  if (output.projects.length > 0 && output.projects.map((project) => project.project_id).sort().join() !== [...selectedIds].sort().join()) {
     violations.push({ path: 'projects', message: 'Project IDs do not match the selected three exactly', hard: true });
   }
 
@@ -113,6 +145,9 @@ export function validateWriting(
     const entryTools = tools(entry);
     bullets.forEach((bullet, index) => {
       const cited = facts(entry, bullet.source_fact_ids);
+      if (bullet.source_fact_ids.length > 2) {
+        violations.push({ path: `${path}.${index}.source_fact_ids`, message: 'At most 2 source facts may be cited per bullet', hard: true });
+      }
       if (cited.length !== bullet.source_fact_ids.length || cited.length === 0) violations.push({ path: `${path}.${index}.source_fact_ids`, message: 'Fact ID is missing or belongs to another entry', hard: true });
       const citedText = cited.map((fact) => fact.text).join(' ').toLocaleLowerCase();
       const bulletNumbers = bullet.text.match(NUMBER_PATTERN) ?? [];
@@ -137,6 +172,19 @@ export function validateWriting(
       for (const term of vocabulary) {
         if (bullet.text.toLocaleLowerCase().includes(term) && !citedText.includes(term) && !entryTools.has(term)) {
           violations.push({ path: `${path}.${index}.text`, message: `Unsupported tool or JD term ${term}`, hard: true });
+        }
+      }
+      // Deterministic specificity check: warn when concrete tokens from cited facts are dropped and are JD-relevant
+      const jdTerms = input.analysis.requirements.map((r) => r.text.toLocaleLowerCase()).concat(input.analysis.keywords.map((k) => k.toLocaleLowerCase()));
+      for (const fact of cited) {
+        const factTokens = fact.text.match(/[a-zA-Z0-9_\-]+/g) ?? [];
+        for (const token of factTokens) {
+          const lowerToken = token.toLocaleLowerCase();
+          if (lowerToken.length > 3 && jdTerms.some((t) => t.includes(lowerToken))) {
+            if (!bullet.text.toLocaleLowerCase().includes(lowerToken)) {
+              warnings.push({ path: `${path}.${index}.text`, message: `Lost concrete JD-relevant term: ${token}`, hard: false });
+            }
+          }
         }
       }
       for (const phrase of BANNED) if (bullet.text.toLocaleLowerCase().includes(phrase)) warnings.push({ path: `${path}.${index}.text`, message: `Banned phrase ${phrase}`, hard: false });

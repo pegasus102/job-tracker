@@ -25,6 +25,6 @@ export function reportBulletSimilarity(
   return bullets.map((bullet) => {
     const source = bullet.sourceFactIds.map((id) => facts.get(id) ?? '').join(' ');
     const similarity = bulletSimilarity(bullet.text, source);
-    return { entryId: bullet.entryId, bulletText: bullet.text, similarity, nearVerbatim: similarity > 0.9 };
+    return { entryId: bullet.entryId, bulletText: bullet.text, similarity, nearVerbatim: similarity >= 0.9 };
   });
 }

@@ -17,14 +17,17 @@ export async function POST(request: Request) {
     if (jobError || !job) throw jobError || new Error('Job not found');
     if (profileError || !profile) throw profileError || new Error('Master profile not found');
     if (!job.tailored_cv_json) return NextResponse.json({ success: false, error: 'Generate the CV before exporting.' }, { status: 400 });
-    const metrics = loadCarlitoMetrics();
-    const estimateResult = estimate(job.tailored_cv_json, undefined, metrics);
     let buffer: Buffer | Uint8Array;
-    let cv = job.tailored_cv_json;
-    if (estimateResult.overflow) {
-      const fitted = await fitCv(profile, cv, { metrics });
-      buffer = fitted.buffer;
-      cv = fitted.cv;
+    const cv = job.tailored_cv_json;
+    if (process.env.ENABLE_CV_V2 === 'true') {
+      const metrics = loadCarlitoMetrics();
+      const estimateResult = estimate(cv, undefined, metrics);
+      if (estimateResult.overflow) {
+        const fitted = await fitCv(profile, cv, { metrics });
+        buffer = fitted.buffer;
+      } else {
+        buffer = await buildCvDocx(profile, cv);
+      }
     } else {
       buffer = await buildCvDocx(profile, cv);
     }

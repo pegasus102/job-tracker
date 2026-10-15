@@ -18,6 +18,9 @@ describe('job input preparation', () => {
     const result = prepareJobInput({ job_description_raw: 'Sign in to view this job. Cookies required. Enable JavaScript.' });
     expect(result.quality.status).toBe('poor');
     expect(() => requireUsableJobInput(result)).toThrowError(JdNeedsReviewError);
+    // With forceJd dev option, poor status is bypassed
+    const forced = requireUsableJobInput(result, { forceJd: true });
+    expect(forced).toBeDefined();
   });
 
   it('truncates long input while retaining priority sections', () => {
