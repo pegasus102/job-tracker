@@ -4,10 +4,13 @@ import { buildCvDocx } from '../../../lib/cv-v2/docx-builder';
 import { estimate, loadCarlitoMetrics } from '../../../lib/cv-v2/fit-estimator';
 import { fitCv } from '../../../lib/cv-v2/fit-loop';
 
-const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+function getSupabase() {
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
 
 export async function POST(request: Request) {
   try {
+    const supabase = getSupabase();
     const { job_id } = await request.json();
     if (!job_id) return NextResponse.json({ success: false, error: 'job_id is required' }, { status: 400 });
     const [{ data: job, error: jobError }, { data: profile, error: profileError }] = await Promise.all([
